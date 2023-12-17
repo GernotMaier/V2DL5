@@ -218,11 +218,14 @@ def _dqm_report(obs_table):
         "OBS_ID",
         "RUNTYPE",
         "DATACAT",
+        "N_TELS",
+        "TELLIST",
         "DQMSTAT",
         "WEATHER",
         "L3RATE",
         "L3RATESD",
         "FIRMEAN1",
+        "FIRCORM1",
         "FIRSTD1",
     ].pprint_all()
 
@@ -235,12 +238,28 @@ def _dqm_report(obs_table):
         _print_min_max(obs_table, epoch_mask, "L3RATESD", f"{epoch} (Hz)")
         _print_min_max(obs_table, epoch_mask, "FIRMEAN1", f"{epoch} (deg)")
         _print_min_max(obs_table, epoch_mask, "FIRSTD1", f"{epoch} (deg)")
+        _print_min_max(obs_table, epoch_mask, "FIRCORM1", f"{epoch} (deg)")
 
         _print_outlier(obs_table, epoch_mask, "L3RATE", f"{epoch} (Hz)")
         _print_outlier(obs_table, epoch_mask, "FIRMEAN1", f"{epoch} (deg)")
+        _print_outlier(obs_table, epoch_mask, "FIRCORM1", f"{epoch} (deg)")
+        _print_outlier(obs_table, epoch_mask, "FIRSTD1", f"{epoch} (deg)")
 
 
-def _print_outlier(obs_table, mask, column, string, sigma=3):
+def _reject_outliers(data, m=3.0):
+    """
+    from
+    stackoverflow.com/questions/11686720/is-there-a-numpy-builtin-to-reject-outliers-from-a-list
+
+    """
+    d = np.abs(data - np.median(data))
+    mdev = np.median(d)
+    s = d / mdev if mdev else np.zeros(len(d))
+    print("AAAA", mdev, data[s > m])
+    return data[s < m]
+
+
+def _print_outlier(obs_table, mask, column, string, sigma=2):
     """
     Print OBS_ID with more than sigma deviation from mean
 
@@ -250,6 +269,9 @@ def _print_outlier(obs_table, mask, column, string, sigma=3):
 
     _mean = np.mean(_obs_table_cleaned[column])
     _std = np.std(_obs_table_cleaned[column])
+    _ff = np.ndarray.flatten(_obs_table_cleaned[column])
+    _rr = _reject_outliers(_ff)
+    print("BBBB", len(_ff), len(_rr))
     print(f"Mean {column} for {string}: {_mean:.2f} +- {_std:.2f}")
 
     # get list of obs_ids with more than sigma deviation from mean
@@ -270,18 +292,21 @@ def _print_min_max(obs_table, mask, column, string):
     """
 
     _obs_table_cleaned = obs_table[(obs_table[column] > -9998.0) & mask]
-    min_index = np.argmin(_obs_table_cleaned[column])
-    max_index = np.argmax(_obs_table_cleaned[column])
+    try:
+        min_index = np.argmin(_obs_table_cleaned[column])
+        max_index = np.argmax(_obs_table_cleaned[column])
 
-    print(f"{column} for {string}:")
-    print(
-        f"    Max for obs_id {_obs_table_cleaned['OBS_ID'][max_index]}: "
-        f"{_obs_table_cleaned[column][max_index]:.2f}"
-    )
-    print(
-        f"    Min for obs_id {_obs_table_cleaned['OBS_ID'][min_index]}: "
-        f"{_obs_table_cleaned[column][min_index]:.2f}"
-    )
+        print(f"{column} for {string}:")
+        print(
+            f"    Max for obs_id {_obs_table_cleaned['OBS_ID'][max_index]}: "
+            f"{_obs_table_cleaned[column][max_index]:.2f}"
+        )
+        print(
+            f"    Min for obs_id {_obs_table_cleaned['OBS_ID'][min_index]}: "
+            f"{_obs_table_cleaned[column][min_index]:.2f}"
+        )
+    except ValueError:
+        _logger.warning(f"Empty list for min/max determination of {column}")
 
 
 def _epoch_masks(obs_table):
