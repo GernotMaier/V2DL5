@@ -1,8 +1,9 @@
-import csv
 import logging
 
 import astropy.units as u
+import numpy as np
 import yaml
+from astropy.table import Table
 
 import v2dl5.light_curves.orbital_period as orbit
 
@@ -66,64 +67,10 @@ class LightCurveDataReader:
             if data_config["file_name"].endswith(".csv") or data_config["file_name"].endswith(
                 ".ecsv"
             ):
-                return self._read_fluxes_from_csv_file(data_config)
+                return self._read_fluxes_from_ecsv_file(data_config)
         except KeyError:
             self._logger.error("File name not found in configuration file")
             raise KeyError
-
-    def _read_fluxes_from_csv_file(self, data_config, TimeMinMax=True, MJD_min=-1.0, MJD_max=-1.0):
-        """
-        Read gamma-ray fluxes from csv file (open gamma-ray format)
-        - ignore all lines with '#'
-        - accept a random number of spaces as delimiter
-
-        Parameters:
-        -----------
-        data_config: dict
-            configuration dictionary
-        TimeMinMax: bool
-            flag to read time_min and time_max
-        MJD_min: float
-            MJD min value for MJD cut
-        MJD_max: float
-            MJD max value for MJD cut
-
-        """
-        fp = open(data_config["file_name"])
-        rdr = csv.DictReader(
-            filter(lambda row: row[0] != "#", fp), delimiter=" ", skipinitialspace=True
-        )
-        f = {}
-        f["time_min"] = []
-        f["time_max"] = []
-        f["flux"] = []
-        f["flux_err"] = []
-        for row in rdr:
-            if TimeMinMax:
-                t_min = float(row["time_min"])
-                t_max = float(row["time_max"])
-            else:
-                t_min = float(row["time"])
-                t_max = float(row["time"]) + 0.1
-            if MJD_min > 0 and t_min < MJD_min:
-                continue
-            if MJD_max > 0 and t_max > MJD_max:
-                continue
-
-            f["time_min"].append(t_min)
-            f["time_max"].append(t_max)
-
-            f["flux"].append(float(row["flux"]))
-            if "flux_err" in row:
-                f["flux_err"].append(float(row["flux_err"]))
-            elif "flux_up" in row:
-                f["flux_err"].append(0.5 * abs(float(row["flux_up"]) - float(row["flux_down"])))
-        fp.close()
-
-        f["MJD"] = [0.5 * (a + b) for a, b in zip(f["time_min"], f["time_max"])]
-        f["MJD_err"] = [0.5 * (b - a) for a, b in zip(f["time_min"], f["time_max"])]
-
-        return f
 
     def _add_orbital_parameters(self, data):
         """
@@ -165,3 +112,53 @@ class LightCurveDataReader:
         # conversion to erg
         f = f * (E_0.to(u.erg)).value
         return [v * f for v in C_v], [e * f for e in C_e]
+
+    def _read_fluxes_from_ecsv_file(self, data_config, TimeMinMax=True, MJD_min=-1.0, MJD_max=-1.0):
+        """
+        Read gamma-ray fluxes from ecsv file (open gamma-ray format)
+
+        Parameters:
+        -----------
+        data_config: dict
+            configuration dictionary
+        TimeMinMax: bool
+            flag to read time_min and time_max
+        MJD_min: float
+            MJD min value for MJD cut
+        MJD_max: float
+            MJD max value for MJD cut
+
+        """
+        table = Table.read(data_config["file_name"])
+        f = {}
+        if not TimeMinMax:
+            table["time_min"] = table["time"].data
+            table["time_max"] = table["time"].data + 0.1
+
+        # MJD filter
+        condition = np.ones(len(table), dtype=bool)
+        if MJD_min > -1:
+            condition &= table["time_min"] > MJD_min
+        if MJD_max > -1:
+            condition &= table["time_max"] < MJD_max
+        table = table[condition]
+
+        f = {}
+        f["time_min"] = table["time_min"].data.tolist()
+        f["time_max"] = table["time_max"].data.tolist()
+        f["flux"] = table["flux"].data.flatten().tolist()
+        if "flux_err" in table.colnames:
+            f["flux_err"] = table["flux_err"].data.flatten().tolist()
+        else:
+            up = table["flux_up"].data.flatten().tolist()
+            down = table["flux_down"].data.flatten().tolist()
+            f["flux_err"] = [0.5 * abs(u - d) for u, d in zip(up, down)]
+        f["MJD"] = [0.5 * (a + b) for a, b in zip(f["time_min"], f["time_max"])]
+        f["MJD_err"] = [0.5 * (b - a) for a, b in zip(f["time_min"], f["time_max"])]
+        if "flux_ul" in table.colnames:
+            flux_ul = table["flux_ul"].data.flatten().tolist()
+            is_ul = table["is_ul"].data.flatten().tolist()
+            f["flux_ul"] = [flux if is_ul else -1.0 for flux, is_ul in zip(flux_ul, is_ul)]
+        else:
+            f["flux_ul"] = [-1.0 for _ in f["flux"]]
+        return f

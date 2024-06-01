@@ -1,0 +1,8 @@
+data:
+    - instrument: VERITAS
+      file_name: results/light_curve_nightly.ecsv
+      plot_instrument: true
+      plot_variable: flux
+      flux_axis_label: "Flux E>350 GeV (1/(cm$^2$s))"
+      marker_type: 'o'
+      marker_color: 'r'

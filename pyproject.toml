@@ -30,7 +30,7 @@ dependencies = [
     "astroquery",
     "gammapy",
     "Ipython",
-    "pydantic<2",
+    "pydantic",
 ]
 
 [project.optional-dependencies]

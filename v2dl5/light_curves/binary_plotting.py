@@ -50,11 +50,22 @@ class BinaryLightCurvePlotter:
         colors = plotting_utilities.get_color_list(len(self.data))
 
         for idx, (instrument, data) in enumerate(self.data.items()):
-            x, y, e = self._get_light_curve_in_MJD_limits(data, time_axis, mjd_min, mjd_max)
+            x, y, e, x_ul, y_ul = self._get_light_curve_in_MJD_limits(
+                data, time_axis, mjd_min, mjd_max
+            )
 
             if instrument in self.config and self.config["plot_instrument"] is False:
                 continue
-
+            color = (
+                colors[idx]
+                if self.config[idx].get("marker_color") is None
+                else self.config[idx]["marker_color"]
+            )
+            marker = (
+                plotting_utilities.get_marker_list()[idx]
+                if self.config[idx].get("marker_type") is None
+                else self.config[idx]["marker_type"]
+            )
             plt.errorbar(
                 x,
                 y,
@@ -65,21 +76,26 @@ class BinaryLightCurvePlotter:
                     if self.config[idx].get("plot_label") is None
                     else self.config[idx]["plot_label"]
                 ),
-                color=(
-                    colors[idx]
-                    if self.config[idx].get("marker_color") is None
-                    else self.config[idx]["marker_color"]
-                ),
-                marker=(
-                    plotting_utilities.get_marker_list()[idx]
-                    if self.config[idx].get("marker_type") is None
-                    else self.config[idx]["marker_type"]
-                ),
+                color=color,
+                marker=marker,
                 linestyle="none",
                 fillstyle="none",
                 linewidth=plotting_utilities.get_line_width(),
                 markersize=plotting_utilities.get_marker_size(),
             )
+            if len(y_ul) > 0:
+                plt.errorbar(
+                    x_ul,
+                    y_ul,
+                    yerr=0.1 * max(y_ul),
+                    color=color,
+                    fmt="_",
+                    linestyle="none",
+                    fillstyle="none",
+                    uplims=True,
+                    linewidth=plotting_utilities.get_line_width(),
+                    markersize=plotting_utilities.get_marker_size(),
+                )
 
         plt.xlabel(self._get_time_axis_label(time_axis))
         if mjd_min is not None and mjd_max is not None:
@@ -127,21 +143,28 @@ class BinaryLightCurvePlotter:
         x = []
         y = []
         e = []
+        x_ul = []
+        y_ul = []
         for i in range(len(data["MJD"])):
             if mjd_min is not None and data["MJD"][i] < mjd_min:
                 continue
             if mjd_max is not None and data["MJD"][i] > mjd_max:
                 continue
             if time_axis == "MJD":
-                x.append(data["MJD"][i])
+                w_x = data["MJD"][i]
             elif time_axis == "orbital phase":
-                x.append(data["phase"][i])
+                w_x = data["phase"][i]
             else:
                 self._logger.error(f"Unknown time axis: {time_axis}")
                 raise ValueError
-            y.append(data["flux"][i])
-            e.append(data["flux_err"][i])
-        return x, y, e
+            if "flux_ul" in data and data["flux_ul"][i] > 0:
+                x_ul.append(w_x)
+                y_ul.append(data["flux_ul"][i])
+            elif "flux_ul" not in data or data["flux_ul"][i] < 0:
+                x.append(w_x)
+                y.append(data["flux"][i])
+                e.append(data["flux_err"][i])
+        return x, y, e, x_ul, y_ul
 
 
 #

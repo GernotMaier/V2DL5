@@ -207,7 +207,7 @@ class Plot:
         )
 
         try:
-            light_curve.plot(ax=ax, marker="o", label=plot_name, sed_type="flux")
+            light_curve.plot(ax=ax, marker="o", label=plot_name, sed_type="flux", time_format="mjd")
             ax.set_yscale("linear")
             self._plot(
                 plot_name="light_curve_" + plot_name.replace(" ", "_"), output_dir=self.output_dir

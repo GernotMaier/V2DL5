@@ -36,7 +36,7 @@ Activate the environment to start the analysis:
 
 ```bash
 conda activate v2dl5
-export PYTHONPATH=$PYTHONPATH:"${PWD}"
+pip install -e .
 ```
 
 ## Run list generator
@@ -46,10 +46,27 @@ It generates a lot of printout which should be used to fine tune the run selecti
 
 Example:
 
-```bash
-
+```console
 python v2dl5/scripts/generate_runlist.py \
     --obs_table ../../../VTS/DL3/v490/dl3_pointlike_moderate2tel/obs-index.fits.gz \
     --config examples/run_selection.yml \
    --output_dir my_output_dir
+```
+
+## Reflected region analysis
+
+```console
+python v2dl5/scripts/reflected_region_analysis.py \
+    --obs_table ../../../VTS/DL3/v490/dl3_pointlike_moderate2tel/obs-index.fits.gz \
+    --runlist my_output_dir/runlist.txt \
+    --config examples/reflected_region_analysis.yml \
+    --output_dir my_output_dir
+```
+
+## Binary light curve plotting
+
+```console
+python v2dl5/scripts/plot_binary_light_curves.py \
+    --instrument VERITAS \
+    --configuration examples/binary_lightcurve_plotting.yml
 ```
