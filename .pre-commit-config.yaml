@@ -2,19 +2,19 @@
 repos:
   # https://pycqa.github.io/isort/docs/configuration/black_compatibility.html#integration-with-pre-commit
   - repo: https://github.com/pycqa/isort
-    rev: 6.0.1
+    rev: 9.0.0b1
     hooks:
       - id: isort
         args: ["--profile", "black", "--filter-files"]
   # Ruff
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.12
+    rev: v0.16.1
     hooks:
       - id: ruff
         args: ["--fix"]
   # https://github.com/pre-commit/pre-commit-hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -22,28 +22,28 @@ repos:
         args: ['--maxkb=500']
   # Github action
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.7
+    rev: v1.7.12
     hooks:
       - id: actionlint
   # https://pyproject-fmt.readthedocs.io/en/latest/
   - repo: https://github.com/tox-dev/pyproject-fmt
-    rev: "v2.6.0"
+    rev: "v2.27.0"
     hooks:
       - id: pyproject-fmt
   # codespell
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.1
+    rev: v2.4.3
     hooks:
       - id: codespell
   # markdownlint
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.45.0
+    rev: v0.49.1
     hooks:
       - id: markdownlint
         args: ["--disable", "MD041"]
   # yamllint
   - repo: https://github.com/adrienverge/yamllint.git
-    rev: v1.37.1
+    rev: v1.38.0
     hooks:
       - id: yamllint
         args:
@@ -60,7 +60,7 @@ repos:
             }
   # towncrier
   - repo: https://github.com/twisted/towncrier
-    rev: 24.8.0
+    rev: 25.8.0
     hooks:
       - id: towncrier-update
         files: $docs/changes/

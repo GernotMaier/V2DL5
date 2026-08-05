@@ -102,10 +102,12 @@ def process_yaml_file(yaml_path, table):
     mjd_min, mjd_max = get_mjd_range(yaml_path)
     _logger.info(f"Processing {yaml_path} for MJD range {mjd_min}-{mjd_max}")
 
-    with open(yaml_path) as f:
+    with open(yaml_path, encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
-    mask = (table["time_min"] == mjd_min) & (table["time_max"] == mjd_max)
+    mask = np.isclose(table["time_min"], mjd_min, atol=1e-6) & np.isclose(
+        table["time_max"], mjd_max, atol=1e-6
+    )
     idx = np.where(mask)[0]
     if len(idx) == 0:
         _logger.warning(f"No matching entry in table for MJD range {mjd_min}-{mjd_max}")
@@ -144,7 +146,9 @@ def main():
     for yaml_path in yaml_dir.glob("runs_MJD_*.yaml"):
         process_yaml_file(yaml_path, table)
 
-    table.write(args.output_file, format="ascii.ecsv", overwrite=True)
+    output_file = Path(args.output_file)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    table.write(output_file, format="ascii.ecsv", overwrite=True)
     _logger.info(f"Written updated table to {args.output_file}")
 
 

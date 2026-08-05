@@ -1,7 +1,6 @@
 """Plotting."""
 
 import logging
-import warnings
 
 import matplotlib.pyplot as plt
 from astropy import units as u
@@ -12,8 +11,6 @@ from gammapy.visualization import (
     plot_spectrum_datasets_off_regions,
     plot_theta_squared_table,
 )
-
-warnings.filterwarnings("ignore", category=UserWarning)
 
 
 class Plot:
@@ -80,20 +77,17 @@ class Plot:
             Light curves per observation and per night
 
         """
-        for _, light_curve in light_curves.items():
+        for light_curve in light_curves.values():
             self.plot_light_curve(light_curve["light_curve"], light_curve["title"])
 
     def plot_event_histograms(self):
         """Plot event histograms per observation."""
         for obs in self.v2dl5_data.get_observations():
             obs.events.select_offset([0, 2.5] * u.deg).peek()
-            try:
-                self._plot(
-                    plot_name=f"events_obs_{obs.obs_id}",
-                    output_dir=self.output_dir / "events",
-                )
-            except TypeError:
-                pass
+            self._plot(
+                plot_name=f"events_obs_{obs.obs_id}",
+                output_dir=self.output_dir / "events",
+            )
 
     def plot_source_statistics(self):
         """Plot significance vs observation time."""
@@ -120,13 +114,10 @@ class Plot:
         ax_sqrt_ts.set_title("Sqrt(TS)")
         ax_sqrt_ts.set_xlabel("Livetime [h]")
         ax_sqrt_ts.set_ylabel("Sqrt(TS)")
-        try:
-            self._plot(
-                plot_name="source_statistics",
-                output_dir=self.output_dir,
-            )
-        except TypeError:
-            pass
+        self._plot(
+            plot_name="source_statistics",
+            output_dir=self.output_dir,
+        )
 
     def plot_irfs(self):
         """Plot instrument response functions per observation."""
@@ -138,18 +129,15 @@ class Plot:
         """Plot successful fit results and residuals."""
         try:
             ax_spectrum, _ = data_set.plot_fit()
-        except ValueError:
+        except ValueError as error:
+            self._logger.warning("Could not plot fit for %s: %s", data_set.name, error)
             return
-        # TODO: Adjust axis limits and add any necessary labels or annotations to improve plot clarity.
         ax_spectrum.set_ylim(0.1, 40)
         data_set.plot_masks(ax=ax_spectrum)
-        try:
-            self._plot(
-                plot_name=f"{data_set.name}_{data_set.models[0].name}_fit",
-                output_dir=self.output_dir / "fit",
-            )
-        except TypeError:
-            pass
+        self._plot(
+            plot_name=f"{data_set.name}_{data_set.models[0].name}_fit",
+            output_dir=self.output_dir / "fit",
+        )
 
     def plot_flux_points(self, flux_point_dataset):
         """Plot flux points."""
@@ -168,9 +156,10 @@ class Plot:
         self._plot(plot_name="spectrum", output_dir=self.output_dir)
         try:
             flux_point_dataset.plot_residuals(method="diff/model")
+        except ValueError as error:
+            self._logger.warning("Could not plot flux-point residuals: %s", error)
+        else:
             self._plot(plot_name="residuals", output_dir=self.output_dir)
-        except ValueError:
-            pass
 
     def plot_light_curve(self, light_curve, plot_name):
         """Plot light curve."""
@@ -179,24 +168,20 @@ class Plot:
             gridspec_kw={"left": 0.16, "bottom": 0.2, "top": 0.98, "right": 0.98},
         )
 
-        try:
-            light_curve.plot(ax=ax, marker="o", label=plot_name, sed_type="flux", time_format="mjd")
-            ax.set_yscale("linear")
-            self._plot(
-                plot_name="light_curve_" + plot_name.replace(" ", "_"), output_dir=self.output_dir
-            )
-        except AttributeError:
-            pass
+        light_curve.plot(ax=ax, marker="o", label=plot_name, sed_type="flux", time_format="mjd")
+        ax.set_yscale("linear")
+        self._plot(
+            plot_name="light_curve_" + plot_name.replace(" ", "_"), output_dir=self.output_dir
+        )
 
     def plot_regions(self, exclusion_mask):
         """Plot on and off regions, exclusion mask."""
+        if exclusion_mask is None or self.on_region is None:
+            raise ValueError("An exclusion mask and on region are required for region plots")
         ax = exclusion_mask.plot()
         self.on_region.to_pixel(ax.wcs).plot(ax=ax, edgecolor="k")
-        try:
-            plot_spectrum_datasets_off_regions(ax=ax, datasets=self.data_set)
-            self._plot(plot_name="regions", output_dir=self.output_dir)
-        except AttributeError:
-            pass
+        plot_spectrum_datasets_off_regions(ax=ax, datasets=self.data_set)
+        self._plot(plot_name="regions", output_dir=self.output_dir)
 
     def plot_theta2(self):
         """Plot theta2 distribution."""
@@ -209,18 +194,15 @@ class Plot:
         )
         self._logger.info(f"Theta2 table {theta2_table}")
 
-        try:
-            plt.figure(figsize=(10, 5))
-            plot_theta_squared_table(theta2_table)
-            self._plot(plot_name="theta2", output_dir=self.output_dir)
-        except AttributeError:
-            pass
+        plt.figure(figsize=(10, 5))
+        plot_theta_squared_table(theta2_table)
+        self._plot(plot_name="theta2", output_dir=self.output_dir)
 
     def _plot(self, plot_name=None, output_dir=None):
         """Execute plotting helper function."""
         if output_dir is not None:
             output_dir.mkdir(parents=True, exist_ok=True)
-            _ofile = f"{output_dir}/{plot_name}.png"
+            _ofile = output_dir / f"{plot_name}.png"
             self._logger.info("Plotting %s", _ofile)
             plt.savefig(_ofile)
         else:
@@ -235,13 +217,10 @@ class Plot:
         obs.aeff.plot_offset_dependence(ax=axes[1], energy=self.default_energy_true())
         plt.tight_layout()
 
-        try:
-            self._plot(
-                plot_name=f"aeff_obs_{obs.obs_id}",
-                output_dir=self.output_dir / "irfs",
-            )
-        except TypeError:
-            pass
+        self._plot(
+            plot_name=f"aeff_obs_{obs.obs_id}",
+            output_dir=self.output_dir / "irfs",
+        )
 
     def _plot_energy_dispersion(self, obs):
         """Plot energy dispersion."""
@@ -261,10 +240,7 @@ class Plot:
 
         plt.tight_layout()
 
-        try:
-            self._plot(
-                plot_name=f"edisp_obs_{obs.obs_id}",
-                output_dir=self.output_dir / "irfs",
-            )
-        except TypeError:
-            pass
+        self._plot(
+            plot_name=f"edisp_obs_{obs.obs_id}",
+            output_dir=self.output_dir / "irfs",
+        )

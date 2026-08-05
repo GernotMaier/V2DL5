@@ -98,7 +98,7 @@ class Analysis:
         for dataset in self.datasets:
             self._write_datasets(dataset, f"{dataset.name}.fits.gz")
         self._write_datasets(self.flux_points, "flux_points.ecsv", "gadf-sed")
-        for _, light_curve in self.light_curves.items():
+        for light_curve in self.light_curves.values():
             title_with_underscores = light_curve["title"].replace(" ", "_")
             self._write_datasets(
                 light_curve["light_curve"],
@@ -126,7 +126,9 @@ class Analysis:
         if datasets is None:
             return
 
-        _out_file = f"{self._output_dir}/data/{filename}"
+        _data_dir = Path(self._output_dir) / "data"
+        _data_dir.mkdir(parents=True, exist_ok=True)
+        _out_file = _data_dir / filename
         self._logger.info(f"Writing datasets to {_out_file} ({file_format}, {sed_type})")
         if file_format is not None:
             if sed_type is not None:
@@ -238,13 +240,15 @@ class Analysis:
                 index=model.get("index", 2.0),
                 reference=u.Quantity(model.get("reference_energy", "1.0 TeV")),
             )
-        elif model["model"] == "ecpl":
+        elif model.get("model") == "ecpl":
             _spectral_model = ExpCutoffPowerLawSpectralModel(
                 amplitude=1e-12 * u.Unit("cm-2 s-1 TeV-1"),
                 index=model.get("index", 2.0),
                 lambda_=u.Quantity(model.get("lambda", "0.1 TeV-1")),
                 reference=u.Quantity(model.get("reference_energy", "1.0 TeV")),
             )
+        else:
+            raise ValueError(f"Unknown spectral model: {model.get('model')}")
 
         self.spectral_model = SkyModel(
             spectral_model=_spectral_model, name=model.get("model", "pl")
@@ -254,9 +258,9 @@ class Analysis:
         """Calculate flux points."""
         energy_edges = (
             np.geomspace(
-                u.Quantity(self.args_dict["flux_points"]["energy"]["min"]).value,
-                u.Quantity(self.args_dict["flux_points"]["energy"]["max"]).value,
-                self.args_dict["flux_points"]["energy"]["nbins"],
+                u.Quantity(self.args_dict["flux_points"]["energy"]["min"]).to("TeV").value,
+                u.Quantity(self.args_dict["flux_points"]["energy"]["max"]).to("TeV").value,
+                self.args_dict["flux_points"]["energy"]["nbins"] + 1,
             )
             * u.TeV
         )
@@ -287,12 +291,12 @@ class Analysis:
         """
         light_curves = {}
 
-        light_curves["per_obs"] = {
+        light_curves["per_observation"] = {
             "light_curve": None,
             "title": "per observation",
             "time_intervals": None,
         }
-        light_curves["per_obs"] = {
+        light_curves["per_night"] = {
             "light_curve": None,
             "title": "per night",
             "time_intervals": (
@@ -313,7 +317,7 @@ class Analysis:
                 "time_intervals": time_intervals,
             }
 
-        for _, light_curve in light_curves.items():
+        for light_curve in light_curves.values():
             self._logger.info(light_curve["title"])
             light_curve["light_curve"] = self._light_curve(data_sets, light_curve["time_intervals"])
 

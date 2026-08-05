@@ -80,7 +80,7 @@ def read_list_of_targets(target_list_file):
             for typed_id, main_id in zip(object_table["TYPED_ID"], object_table["MAIN_ID"])
         ]
     else:
-        with open(target_list_file) as file:
+        with open(target_list_file, encoding="utf-8") as file:
             target_list = [line.strip() for line in file]
 
     logger.info(f"Found {len(target_list)} targets in {target_list_file}")
@@ -93,7 +93,7 @@ def main():
 
     args_dict = v2dl5.configuration.configuration(args=_parse(), generate_dqm_run_list=True)
 
-    logger.info("args_dict:", args_dict)
+    logger.info("args_dict: %s", args_dict)
 
     target_list = read_list_of_targets(args_dict["target_list"])
 

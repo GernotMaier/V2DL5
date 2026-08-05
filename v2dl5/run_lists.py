@@ -1,6 +1,8 @@
 """Run list selection from observation table."""
 
 import logging
+from contextlib import ExitStack
+from pathlib import Path
 
 import astropy.io
 import astropy.table
@@ -11,8 +13,7 @@ from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.time import Time
 
-import v2dl5.binaries as binaries
-import v2dl5.orbital_phase as orbital_phase
+from v2dl5 import binaries, orbital_phase
 
 _logger = logging.getLogger(__name__)
 
@@ -27,35 +28,16 @@ class ZeroRunLengthError(Exception):
 
 def generate_run_list(args_dict, target):
     """Read observation index table, apply selection cuts and write run list."""
-    calculate_averages(args_dict)
-
     _logger.info("Generate run list. from %s", args_dict["obs_table"])
     obs_table = _read_observation_table(args_dict["obs_table"])
     obs_table = _apply_selection_cuts(obs_table, args_dict, target)
-    try:
-        _logger.info("Selected %d runs.", len(obs_table))
-    except TypeError:
-        _logger.warning("No runs selected (zero length run list).")
+    if obs_table is None:
+        _logger.warning("No runs selected.")
         return
+    _logger.info("Selected %d runs.", len(obs_table))
     _dqm_report(obs_table, args_dict["output_dir"])
     _write_run_list(obs_table, args_dict["output_dir"])
     _print_summary(obs_table, args_dict["on_region"]["target"], target)
-
-
-def calculate_averages(args_dict):
-    """
-    Determine mean / medium for columns relevant for RMS-dependent selection cuts.
-
-    All other DQM cuts are applied (except target cut).
-
-    """
-    _tmp_table = _read_observation_table(args_dict["obs_table"])
-    _tmp_table = _apply_selection_cuts(_tmp_table, args_dict, None)
-    _logger.info(f"Runs selected to calculate averages: {len(_tmp_table)}")
-
-    # TODO
-    # add a class handling averages / outliers plus application of log / lin
-    # selection cuts?
 
 
 def _read_observation_table(obs_table_file_name):
@@ -68,6 +50,8 @@ def _read_observation_table(obs_table_file_name):
 
     """
     obs_table = astropy.table.Table.read(obs_table_file_name)
+    if "DQMSTAT" not in obs_table.colnames:
+        raise ValueError("Observation table is missing required column DQMSTAT")
     obs_table["DQMSTAT"].fill_value = "unknown"
     return obs_table.filled()
 
@@ -108,13 +92,11 @@ def _apply_cut_l3rate(obs_table, args_dict, target):
             l3rate_min = u.Quantity(args_dict["dqm"]["l3_rate_min"][epoch]).to(u.Hz)
         except KeyError:
             l3rate_min = 0.0 * u.Hz
-        mask = np.array(
-            mask & [((obs_table["L3RATE"] > l3rate_min.value) & epoch_mask) | ~epoch_mask]
-        )
+        mask &= ((obs_table["L3RATE"] > l3rate_min.value) & epoch_mask) | ~epoch_mask
         _print_removed_runs(
-            obs_table, mask[0], "L3RATE", f"{epoch} L3Rate > {l3rate_min}", target is not None
+            obs_table, mask, "L3RATE", f"{epoch} L3Rate > {l3rate_min}", target is not None
         )
-    return obs_table[mask[0]]
+    return obs_table[mask]
 
 
 def _apply_cut_ntel_min(obs_table, args_dict, target):
@@ -144,7 +126,7 @@ def _apply_cut_mjd(obs_table, args_dict):
         mask = np.array([Time(row["DATE-OBS"], scale="utc").mjd > mjd_min for row in obs_table])
         obs_table = obs_table[mask]
     if "mjd_max" in args_dict["observations"]:
-        _logger.info(f"Selecting runs after MJD {args_dict['observations']['mjd_max']}")
+        _logger.info(f"Selecting runs before MJD {args_dict['observations']['mjd_max']}")
         mjd_max = args_dict["observations"]["mjd_max"]
         mask = np.array([Time(row["DATE-END"], scale="utc").mjd < mjd_max for row in obs_table])
         obs_table = obs_table[mask]
@@ -201,7 +183,13 @@ def _apply_cut_atmosphere(obs_table, args_dict, target):
         raise
 
     try:
-        mask = np.array([row["WEATHER"][0] in weather for row in obs_table])
+        mask = np.array(
+            [
+                (row["WEATHER"] if isinstance(row["WEATHER"], str) else row["WEATHER"][0])
+                in weather
+                for row in obs_table
+            ]
+        )
     except IndexError:
         _logger.error("IndexError: weather")
         raise
@@ -256,6 +244,8 @@ def _write_run_list(obs_table, output_dir):
         Output directory.
 
     """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
     _logger.info(f"Write run list with {len(obs_table)} runs to {output_dir}/run_list.txt")
 
     column_data = obs_table[np.argsort(obs_table["OBS_ID"])]["OBS_ID"]
@@ -352,6 +342,8 @@ def _outlier_lists(obs_table, string, column, center_measure, outlier_type, sigm
         outlier_list = [row["OBS_ID"] for row in obs_table if row[column] - m > sigma * s]
     elif outlier_type == "min":
         outlier_list = [row["OBS_ID"] for row in obs_table if m - row[column] > sigma * s]
+    else:
+        raise ValueError(f"Unknown outlier type: {outlier_type}")
 
     return m, s, outlier_list
 
@@ -458,10 +450,10 @@ def _print_removed_runs(obs_table, mask, column_name, cut_type, print_runs=True)
     if len(mask) == 0:
         _logger.info(f"No runs removed by {cut_type} cut")
         return
-    _logger.info(f"Remove {len(mask)-mask.sum(~False)} runs failing {cut_type} cut")
+    _logger.info(f"Remove {len(mask) - mask.sum()} runs failing {cut_type} cut")
     _removed_runs = [f"{row['OBS_ID']} ({row[column_name]})" for row in obs_table[~mask]]
     _logger.info(f"Removed following run: {_removed_runs}")
-    _logger.info(f"Keep {mask.sum(~False)} runs after application of {cut_type} cut")
+    _logger.info(f"Keep {mask.sum()} runs after application of {cut_type} cut")
 
 
 def _print_summary(obs_table, target_name, target):
@@ -491,16 +483,14 @@ def split_binary_run_list(run_list_file, obs_table, binary_name, orbital_bins):
 
     """
     with open(run_list_file, encoding="utf-8") as f:
-        run_list = [line.strip() for line in f.readlines()]
+        run_list = [int(line.strip()) for line in f if line.strip()]
+    if orbital_bins < 1:
+        raise ValueError("orbital_bins must be positive")
     _logger.info(f"Splitting run list of length {len(run_list)} into {orbital_bins} bins")
     obs_table = astropy.table.Table.read(obs_table)
-    obs_table = obs_table[np.isin(obs_table["OBS_ID"], run_list)]
-
-    output_files = []
-    for i in range(orbital_bins):
-        output_files.append(
-            open(f"{run_list_file.removesuffix('.txt')}_orbital_bin_{i:02d}.txt", "w")
-        )
+    obs_table = obs_table[np.isin(np.asarray(obs_table["OBS_ID"], dtype=int), run_list)]
+    if len(obs_table) == 0:
+        raise ValueError("No run-list IDs were found in the observation table")
 
     _logger.info(
         f"Using {binary_name} for orbital phase calculation (period: "
@@ -508,18 +498,28 @@ def split_binary_run_list(run_list_file, obs_table, binary_name, orbital_bins):
     )
 
     live_times = [0] * orbital_bins
-    for row in obs_table:
-        phase = orbital_phase.get_orbital_phase_from_iso_time(
-            iso_time=row["DATE-OBS"],
-            orbital_period=binaries.binary_properties()[binary_name]["orbital_period"],
-            mjd_0=binaries.binary_properties()[binary_name]["mjd_0"],
-        )
-        bin_index = int(phase * orbital_bins) % orbital_bins
-        live_times[bin_index] += row["LIVETIME"]
-        output_files[bin_index].write(f"{row['OBS_ID']}\n")
+    output_stem = Path(run_list_file).with_suffix("")
+    with ExitStack() as stack:
+        output_files = [
+            stack.enter_context(
+                open(
+                    f"{output_stem}_orbital_bin_{i:02d}.txt",
+                    "w",
+                    encoding="utf-8",
+                )
+            )
+            for i in range(orbital_bins)
+        ]
 
-    for f in output_files:
-        f.close()
+        for row in obs_table:
+            phase = orbital_phase.get_orbital_phase_from_iso_time(
+                iso_time=row["DATE-OBS"],
+                orbital_period=binaries.binary_properties()[binary_name]["orbital_period"],
+                mjd_0=binaries.binary_properties()[binary_name]["mjd_0"],
+            )
+            bin_index = int(phase * orbital_bins) % orbital_bins
+            live_times[bin_index] += row["LIVETIME"]
+            output_files[bin_index].write(f"{row['OBS_ID']}\n")
 
     plt.figure()
     # Create histogram with bin edges from 0 to 1
@@ -533,10 +533,10 @@ def split_binary_run_list(run_list_file, obs_table, binary_name, orbital_bins):
     plt.xlim(0, 1)
     plt.xlabel("orbital phase")
     plt.ylabel("live time (h)")
-    plot_file = f"{run_list_file.removesuffix('.txt')}_live_time_per_orbital_phase_bin.png"
+    plot_file = f"{output_stem}_live_time_per_orbital_phase_bin.png"
     plt.savefig(plot_file)
     plt.close()
     _logger.info(f"Live time plot saved to {plot_file}")
 
-    _logger.info(f"Run lists written to {run_list_file.removesuffix('.txt')}_orbital_bin_*.txt")
+    _logger.info(f"Run lists written to {output_stem}_orbital_bin_*.txt")
     _logger.info(f"Live times per orbital phase bin: {live_times}")

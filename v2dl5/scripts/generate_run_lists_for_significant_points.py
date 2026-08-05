@@ -17,6 +17,8 @@ import numpy as np
 import uproot
 from astropy.table import Table
 
+logger = logging.getLogger(__name__)
+
 
 def _parse():
     """Parse command line arguments."""
@@ -63,7 +65,7 @@ def main():
         for row in table
         if row["significance"] > args.min_significance
     ]
-    logging.info(f"Found {len(time_windows)} significant (>{args.min_significance}) time windows.")
+    logger.info("Found %d significant (>%s) time windows.", len(time_windows), args.min_significance)
 
     tree = uproot.open(args.anasum_file)["total_1/stereo/tRunSummary"]
     mjd_on = tree["MJDOn"].array()

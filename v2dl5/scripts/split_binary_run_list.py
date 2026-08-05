@@ -10,7 +10,7 @@ Used as input for gammapy or anasum analysis.
 import argparse
 import logging
 
-import v2dl5.run_lists as run_lists
+from v2dl5 import run_lists
 
 
 def _parse():
@@ -43,7 +43,6 @@ def _parse():
         "--binary_name",
         type=str,
         required=True,
-        default=None,
         help="Binary name (e.g., LS I +61 303; see v2dl5.binaries for definition).",
     )
     parser.add_argument(

@@ -1,13 +1,14 @@
 """Sky regions definition."""
 
 import logging
+from importlib.resources import files
+from pathlib import Path
 
 from astropy import units as u
 from astropy.coordinates import Angle, SkyCoord, name_resolve
 from astropy.io import fits
 from astropy.table import Table
 from gammapy.maps import WcsGeom
-from importlib_resources import files
 from regions import CircleSkyRegion
 
 
@@ -143,7 +144,7 @@ class SkyRegions:
 
         # exclusion mask
         geom = WcsGeom.create(
-            npix=(150, 150), binsz=0.05, skydir=self.target.galactic, proj="TAN", frame="icrs"
+            npix=(150, 150), binsz=0.05, skydir=self.target.icrs, proj="TAN", frame="icrs"
         )
 
         self._logger.info("Number of exclusion regions: %d", len(exclusion_regions))
@@ -177,10 +178,14 @@ class SkyRegions:
             f"Reading bright star catalogue from {exclusion_region_dict['star_file']}"
             f" (max wobble distance: {max_wobble_distance})"
         )
-        star_file = files("v2dl5.data").joinpath("data/" + exclusion_region_dict["star_file"])
-        hip = fits.open(star_file)
-
-        catalogue = Table(hip[1].data)
+        configured_path = Path(exclusion_region_dict["star_file"])
+        star_file = (
+            configured_path
+            if configured_path.is_absolute() or configured_path.exists()
+            else files("v2dl5").joinpath("data", configured_path.name)
+        )
+        with fits.open(star_file) as hip:
+            catalogue = Table(hip[1].data)
         catalogue = catalogue[
             catalogue["Vmag"] + catalogue["B-V"] < exclusion_region_dict["magnitude_B"]
         ]
@@ -190,12 +195,9 @@ class SkyRegions:
         )
 
         catalogue = catalogue[catalogue["angular_separation"] < u.Quantity(max_wobble_distance)]
-        catalogue = catalogue[[row is not None for row in catalogue]]
-
         self._logger.info(
             "Number of stars in the catalogue passing cuts on magnitude and FOV: %d", len(catalogue)
         )
-        print(catalogue.pprint_all())
 
         for row in catalogue:
             _exclusion_regions.append(

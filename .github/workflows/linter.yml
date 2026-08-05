@@ -32,7 +32,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.13"
+          python-version: "3.14"
 
 
       - name: Check for non-ASCII characters
@@ -45,7 +45,7 @@ jobs:
             exit 1
           fi
 
-      - name: install packages not included in super-linter
+      - name: Install validation dependencies
         run: |
           pip install validate-pyproject
 
@@ -60,30 +60,38 @@ jobs:
 
       # Dependencies required to avoid errors
       # reported by linters
-      - name: Install mamba dependencies
-        uses: mamba-org/setup-micromamba@v3
+      - name: Install conda dependencies
+        uses: conda-incubator/setup-miniconda@v3
         with:
+          activate-environment: v2dl5
           environment-file: environment.yml
-          init-shell: bash
+          miniforge-version: latest
+          channel-priority: strict
+          auto-activate-base: false
 
       - name: Python dependencies
         run: |
-          pip install -e '.[tests,dev,doc]'
+          pip install -e '.[tests]' build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Install built wheel
+        run: python -m pip install --force-reinstall --no-deps dist/*.whl
+
+      - name: Check console-script entry points
+        run: |
+          v2dl5-add_spectral-fits-to-light-curve-table --help
+          v2dl5-generate-run-list --help
+          v2dl5-generate-run-lists-for-significant-points --help
+          v2dl5-generate-run-lists-from-target-list --help
+          v2dl5-grouped-time-bins --help
+          v2dl5-nightly-time-bins --help
+          v2dl5-plot-binary-light-curves --help
+          v2dl5-print-simplified-light-curve --help
+          v2dl5-reflected-region-analysis --help
+          v2dl5-split-binary-run-list --help
 
       - name: Pre-commit
         run: |
           pre-commit run --all-files
-
-      - name: Lint Code Base
-        uses: super-linter/super-linter@v8
-        env:
-          VALIDATE_ALL_CODEBASE: false
-          VALIDATE_GITHUB_ACTIONS: true
-          VALIDATE_YAML: true
-          VALIDATE_NATURAL_LANGUAGE: true
-          VALIDATE_DOCKERFILE_HADOLINT: true
-          VALIDATE_BASH: true
-          LINTER_RULES_PATH: ./
-
-          DEFAULT_BRANCH: main
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

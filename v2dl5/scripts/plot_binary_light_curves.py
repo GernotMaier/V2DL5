@@ -13,9 +13,11 @@ Includes the following plots:
 import argparse
 import logging
 
-import v2dl5.binaries as binaries
 import v2dl5.light_curves.binary_plotting
 import v2dl5.light_curves.data_reader
+from v2dl5 import binaries
+
+logger = logging.getLogger(__name__)
 
 
 def _parse():
@@ -45,7 +47,7 @@ def _parse():
     parser.add_argument(
         "--binary_name",
         type=str,
-        required=True,
+        required=False,
         default="LS I +61 303",
         help="Binary name (e.g., LS I +61 303; see v2dl5.binaries for definition).",
     )
@@ -85,10 +87,10 @@ def main():
         else:
             args.orbital_bins = 20
 
-    logging.info("Light Curve Analysis - run parameters")
-    logging.info(f"instrument: {args.instrument}")
-    logging.info(f"instrument list: {args.configuration}")
-    logging.info(f"number of bins for averaging: {args.orbital_bins}")
+    logger.info("Light Curve Analysis - run parameters")
+    logger.info("instrument: %s", args.instrument)
+    logger.info("instrument list: %s", args.configuration)
+    logger.info("number of bins for averaging: %s", args.orbital_bins)
 
     try:
         binary = binaries.binary_properties()[args.binary_name]

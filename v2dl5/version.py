@@ -9,7 +9,7 @@ try:
         from ._dev.scm_version import version
     except ImportError:
         from ._version import version
-except Exception:
+except Exception:  # noqa: BLE001
     import warnings
 
     warnings.warn("Could not determine v2dl5 version; this indicates a broken installation.")

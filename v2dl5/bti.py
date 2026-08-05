@@ -6,8 +6,6 @@ import astropy.units as u
 import numpy as np
 from gammapy.data import GTI
 
-logging.basicConfig(level=logging.INFO)
-
 
 class BTI:
     """

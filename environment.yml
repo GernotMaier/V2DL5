@@ -1,9 +1,8 @@
 ---
 # installation:
-# create: mamba env create -f environment.yml
+# create: conda env create -f environment.yml
 # activate: conda activate v2dl5
-# update: mamba env update -f environment.yml --prune
-# update (micromamba): micromamba update -f environment.yml
+# update: conda env update -f environment.yml --prune
 #
 name: v2dl5
 channels:
@@ -11,15 +10,21 @@ channels:
 dependencies:
   - astropy-base
   - astroquery
-  - gammapy
+  - awkward
   - matplotlib
+  - pip
   - pre-commit
   - pydantic
+  - pyyaml
   - pyflakes
   - pylint
   - pytest
   - pytest-cov
   - pytest-xdist
-  - python
+  - python=3.14
   - scipy
   - uproot
+  # These releases provide the Python 3.14 wheels used by this project.
+  - pip:
+      - "gammapy>=2.1,<2.2"
+      - "regions<0.12"

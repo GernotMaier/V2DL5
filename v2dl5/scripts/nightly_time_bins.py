@@ -7,7 +7,7 @@ Read an anasum ROOT file and extract the list of unique observation nights
 using the start and stop MJD times from the run summary tree.
 
 Example:
-    python get_observation_nights.py --anasum_file analysis.anasum.root --output_file nights.txt
+    v2dl5-nightly-time-bins --anasum_file analysis.anasum.root --output_file nights.ecsv
 """
 
 import argparse
@@ -17,6 +17,7 @@ from pathlib import Path
 import awkward as ak
 import numpy as np
 import uproot
+from astropy.table import Table
 
 
 def _parse():
@@ -55,11 +56,13 @@ def get_unique_nights(start_mjd, stop_mjd):
     numpy.ndarray
         Array of unique observation nights (integer MJD)
     """
-    # Get integer part of MJD for start and stop times
-    return np.unique(np.concatenate([
-        np.floor(ak.to_numpy(start_mjd)).astype(int),
-        np.floor(ak.to_numpy(stop_mjd)).astype(int)
-    ]))
+    starts = np.asarray(ak.to_numpy(start_mjd), dtype=float)
+    stops = np.asarray(ak.to_numpy(stop_mjd), dtype=float)
+    nights = [
+        np.arange(int(np.floor(start)), int(np.floor(stop)) + 1)
+        for start, stop in zip(starts, stops)
+    ]
+    return np.unique(np.concatenate(nights)) if nights else np.array([], dtype=int)
 
 
 def main():
@@ -90,10 +93,13 @@ def main():
     nights = get_unique_nights(mjd_start, mjd_stop)
     logger.info(f"Found {len(nights)} unique observation nights")
 
-    night_bins = np.column_stack((nights, nights + 1))
-
     output_path = Path(args.output_file)
-    np.savetxt(output_path, night_bins, fmt='%d %d')
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if len(nights) == 0:
+        raise ValueError("No valid observation nights found")
+    Table(
+        {"time_min": nights.astype(float), "time_max": (nights + 1).astype(float)}
+    ).write(output_path, format="ascii.ecsv", overwrite=True)
     logger.info(f"Written night list to {output_path}")
 
     logger.info(f"First night: MJD {nights[0]}-{nights[0]+1}")
