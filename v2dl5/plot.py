@@ -80,7 +80,7 @@ class Plot:
             Light curves per observation and per night
 
         """
-        for _, light_curve in light_curves.items():
+        for light_curve in light_curves.values():
             self.plot_light_curve(light_curve["light_curve"], light_curve["title"])
 
     def plot_event_histograms(self):

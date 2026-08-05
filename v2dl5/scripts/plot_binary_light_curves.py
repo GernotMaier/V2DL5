@@ -17,6 +17,8 @@ import v2dl5.light_curves.binary_plotting
 import v2dl5.light_curves.data_reader
 from v2dl5 import binaries
 
+logger = logging.getLogger(__name__)
+
 
 def _parse():
     """
@@ -85,10 +87,10 @@ def main():
         else:
             args.orbital_bins = 20
 
-    logging.info("Light Curve Analysis - run parameters")
-    logging.info(f"instrument: {args.instrument}")
-    logging.info(f"instrument list: {args.configuration}")
-    logging.info(f"number of bins for averaging: {args.orbital_bins}")
+    logger.info("Light Curve Analysis - run parameters")
+    logger.info("instrument: %s", args.instrument)
+    logger.info("instrument list: %s", args.configuration)
+    logger.info("number of bins for averaging: %s", args.orbital_bins)
 
     try:
         binary = binaries.binary_properties()[args.binary_name]

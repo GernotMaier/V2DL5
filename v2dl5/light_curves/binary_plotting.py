@@ -82,7 +82,7 @@ class BinaryLightCurvePlotter:
 
         ax = axes if axes else plotting_utilities.paper_figures(None, None)
 
-        for idx, (instrument, data) in enumerate(self.data.items()):
+        for idx, (data_instrument, data) in enumerate(self.data.items()):
             if not self.plot_this_instrument(self.config[idx], y_axis):
                 continue
             color, marker = self.get_marker_and_color(idx)
@@ -104,7 +104,7 @@ class BinaryLightCurvePlotter:
                 e,
                 None,
                 label=(
-                    instrument
+                    data_instrument
                     if self.config[idx].get("plot_label") is None
                     else self.config[idx]["plot_label"]
                 ),
@@ -421,7 +421,7 @@ class BinaryLightCurvePlotter:
         ax = plotting_utilities.paper_figures(None, None)
         ax.set_xlim([0, 1])
 
-        for idx, (instrument, data) in enumerate(self.data.items()):
+        for idx, (data_instrument, data) in enumerate(self.data.items()):
             if self.config[idx].get("plot_live_time_histogram", False) is False:
                 continue
             color, _ = self.get_marker_and_color(idx)
@@ -442,7 +442,7 @@ class BinaryLightCurvePlotter:
                 bin_heights,
                 width=bin_width*0.9,
                 label=(
-                    instrument
+                    data_instrument
                     if self.config[idx].get("plot_label") is None
                     else self.config[idx]["plot_label"]
                 ),
@@ -471,7 +471,7 @@ class BinaryLightCurvePlotter:
 
         _ = plotting_utilities.paper_figures(None, None)
 
-        for idx, (instrument, data) in enumerate(self.data.items()):
+        for idx, (data_instrument, data) in enumerate(self.data.items()):
             if self.config[idx].get("plot_flux_vs_index", False) is False:
                 continue
             color, _ = self.get_marker_and_color(idx)
@@ -492,7 +492,7 @@ class BinaryLightCurvePlotter:
                 xerr=x_e,
                 yerr=y_e,
                 label=(
-                    instrument
+                    data_instrument
                     if self.config[idx].get("plot_label") is None
                     else self.config[idx]["plot_label"]
                 ),
@@ -524,7 +524,7 @@ class BinaryLightCurvePlotter:
 
         _ = plotting_utilities.paper_figures(None, None)
 
-        for idx, (instrument, data) in enumerate(self.data.items()):
+        for idx, (data_instrument, data) in enumerate(self.data.items()):
             if self.config[idx].get("plot_1d_distribution", False) is False:
                 continue
             color, _ = self.get_marker_and_color(idx)
@@ -539,7 +539,7 @@ class BinaryLightCurvePlotter:
                 y,
                 bins=25,
                 label=(
-                    instrument
+                    data_instrument
                     if self.config[idx].get("plot_label") is None
                     else self.config[idx]["plot_label"]
                 ),

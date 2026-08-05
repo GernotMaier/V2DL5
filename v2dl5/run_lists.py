@@ -1,6 +1,7 @@
 """Run list selection from observation table."""
 
 import logging
+from contextlib import ExitStack
 
 import astropy.io
 import astropy.table
@@ -495,30 +496,33 @@ def split_binary_run_list(run_list_file, obs_table, binary_name, orbital_bins):
     obs_table = astropy.table.Table.read(obs_table)
     obs_table = obs_table[np.isin(obs_table["OBS_ID"], run_list)]
 
-    output_files = []
-    for i in range(orbital_bins):
-        output_files.append(
-            open(f"{run_list_file.removesuffix('.txt')}_orbital_bin_{i:02d}.txt", "w")
-        )
-
     _logger.info(
         f"Using {binary_name} for orbital phase calculation (period: "
         f"{binaries.binary_properties()[binary_name]['orbital_period']} days)"
     )
 
     live_times = [0] * orbital_bins
-    for row in obs_table:
-        phase = orbital_phase.get_orbital_phase_from_iso_time(
-            iso_time=row["DATE-OBS"],
-            orbital_period=binaries.binary_properties()[binary_name]["orbital_period"],
-            mjd_0=binaries.binary_properties()[binary_name]["mjd_0"],
-        )
-        bin_index = int(phase * orbital_bins) % orbital_bins
-        live_times[bin_index] += row["LIVETIME"]
-        output_files[bin_index].write(f"{row['OBS_ID']}\n")
+    with ExitStack() as stack:
+        output_files = [
+            stack.enter_context(
+                open(
+                    f"{run_list_file.removesuffix('.txt')}_orbital_bin_{i:02d}.txt",
+                    "w",
+                    encoding="utf-8",
+                )
+            )
+            for i in range(orbital_bins)
+        ]
 
-    for f in output_files:
-        f.close()
+        for row in obs_table:
+            phase = orbital_phase.get_orbital_phase_from_iso_time(
+                iso_time=row["DATE-OBS"],
+                orbital_period=binaries.binary_properties()[binary_name]["orbital_period"],
+                mjd_0=binaries.binary_properties()[binary_name]["mjd_0"],
+            )
+            bin_index = int(phase * orbital_bins) % orbital_bins
+            live_times[bin_index] += row["LIVETIME"]
+            output_files[bin_index].write(f"{row['OBS_ID']}\n")
 
     plt.figure()
     # Create histogram with bin edges from 0 to 1

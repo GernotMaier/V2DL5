@@ -37,12 +37,12 @@ class LightCurveDataReader:
             with open(configuration_file) as file:
                 _yml_in = yaml.safe_load(file)
                 self.config = _yml_in["data"]
-        except FileNotFoundError as err:
+        except FileNotFoundError:
             self._logger.error("Configuration file not found: %s", configuration_file)
-            raise err
-        except KeyError as err:
+            raise
+        except KeyError:
             self._logger.error("Data key not found in configuration file %s", configuration_file)
-            raise err
+            raise
 
         self.binary = binary
         self._logger.info("Binary properties: %s", self.binary)
@@ -108,7 +108,7 @@ class LightCurveDataReader:
         phase_mask = [
             (p >= phase_min) & (p <= phase_max) for p in phases
         ]
-        for key in data.keys():
+        for key in data:
             data[key] = [val for val, mask in zip(data[key], phase_mask) if mask]
 
         return data

@@ -93,7 +93,7 @@ def main():
 
     args_dict = v2dl5.configuration.configuration(args=_parse(), generate_dqm_run_list=True)
 
-    logger.info("args_dict:", args_dict)
+    logger.info("args_dict: %s", args_dict)
 
     target_list = read_list_of_targets(args_dict["target_list"])
 

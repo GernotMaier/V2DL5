@@ -98,7 +98,7 @@ class Analysis:
         for dataset in self.datasets:
             self._write_datasets(dataset, f"{dataset.name}.fits.gz")
         self._write_datasets(self.flux_points, "flux_points.ecsv", "gadf-sed")
-        for _, light_curve in self.light_curves.items():
+        for light_curve in self.light_curves.values():
             title_with_underscores = light_curve["title"].replace(" ", "_")
             self._write_datasets(
                 light_curve["light_curve"],
@@ -313,7 +313,7 @@ class Analysis:
                 "time_intervals": time_intervals,
             }
 
-        for _, light_curve in light_curves.items():
+        for light_curve in light_curves.values():
             self._logger.info(light_curve["title"])
             light_curve["light_curve"] = self._light_curve(data_sets, light_curve["time_intervals"])
 
