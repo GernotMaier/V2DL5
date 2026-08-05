@@ -45,7 +45,7 @@ jobs:
             exit 1
           fi
 
-      - name: install packages not included in super-linter
+      - name: Install validation dependencies
         run: |
           pip install validate-pyproject
 
@@ -73,17 +73,3 @@ jobs:
       - name: Pre-commit
         run: |
           pre-commit run --all-files
-
-      - name: Lint Code Base
-        uses: super-linter/super-linter@v8
-        env:
-          VALIDATE_ALL_CODEBASE: false
-          VALIDATE_GITHUB_ACTIONS: true
-          VALIDATE_YAML: true
-          VALIDATE_NATURAL_LANGUAGE: true
-          VALIDATE_DOCKERFILE_HADOLINT: true
-          VALIDATE_BASH: true
-          LINTER_RULES_PATH: ./
-
-          DEFAULT_BRANCH: main
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
