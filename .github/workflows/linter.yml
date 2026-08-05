@@ -60,11 +60,12 @@ jobs:
 
       # Dependencies required to avoid errors
       # reported by linters
-      - name: Install mamba dependencies
-        uses: mamba-org/setup-micromamba@v3
+      - name: Install conda dependencies
+        uses: conda-incubator/setup-miniconda@v3
         with:
+          activate-environment: v2dl5
           environment-file: environment.yml
-          init-shell: bash
+          auto-activate-base: false
 
       - name: Python dependencies
         run: |

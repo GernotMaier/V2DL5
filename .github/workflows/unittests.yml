@@ -24,12 +24,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install mamba
-        uses: mamba-org/setup-micromamba@v3
+      - name: Install conda
+        uses: conda-incubator/setup-miniconda@v3
         with:
+          activate-environment: v2dl5
           environment-file: environment.yml
-          create-args: python=${{ matrix.python-version }}
-          init-shell: bash
+          python-version: ${{ matrix.python-version }}
+          auto-activate-base: false
 
       - name: Unit tests
         shell: bash -leo pipefail {0}
