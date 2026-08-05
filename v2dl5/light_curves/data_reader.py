@@ -213,7 +213,12 @@ class LightCurveDataReader:
         elif "time" in table.colnames and "time_min" not in table.colnames:
             time_min_max = False
 
-        required = {"time" if not time_min_max else "time_min", "flux"}
+        required = {
+            "time" if not time_min_max else "time_min",
+            "flux",
+        }
+        if time_min_max:
+            required.add("time_max")
         if not time_min_max:
             required.add("time")
         missing = required.difference(table.colnames)

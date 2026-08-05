@@ -4,6 +4,7 @@ import logging
 import math
 from pathlib import Path
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -142,6 +143,7 @@ def get_paper_figures_parameters(width=None, height=None, xtick_top=True, legend
 def paper_figures(width=None, height=None, columns=1, xtick_top=True):
     """Set figures parameters for paper plotting."""
     paper_parameters = get_paper_figures_parameters(width, height, xtick_top)
+    mpl.rcParams.update(paper_parameters)
     width = paper_parameters["figure.figsize"][0] if width is None else width
     height = paper_parameters["figure.figsize"][1] if height is None else height
 

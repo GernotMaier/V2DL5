@@ -31,6 +31,9 @@ def generate_run_list(args_dict, target):
     _logger.info("Generate run list. from %s", args_dict["obs_table"])
     obs_table = _read_observation_table(args_dict["obs_table"])
     obs_table = _apply_selection_cuts(obs_table, args_dict, target)
+    if obs_table is None:
+        _logger.warning("No runs selected.")
+        return
     _logger.info("Selected %d runs.", len(obs_table))
     _dqm_report(obs_table, args_dict["output_dir"])
     _write_run_list(obs_table, args_dict["output_dir"])

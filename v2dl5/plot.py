@@ -127,7 +127,11 @@ class Plot:
 
     def plot_fit(self, data_set):
         """Plot successful fit results and residuals."""
-        ax_spectrum, _ = data_set.plot_fit()
+        try:
+            ax_spectrum, _ = data_set.plot_fit()
+        except ValueError as error:
+            self._logger.warning("Could not plot fit for %s: %s", data_set.name, error)
+            return
         ax_spectrum.set_ylim(0.1, 40)
         data_set.plot_masks(ax=ax_spectrum)
         self._plot(
