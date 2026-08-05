@@ -1,6 +1,5 @@
 [build-system]
 build-backend = "setuptools.build_meta"
-
 requires = [ "setuptools>=65", "setuptools-scm[toml]>=6.2" ]
 
 [project]
@@ -22,6 +21,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Scientific/Engineering :: Astronomy",
 ]
 dynamic = [ "version" ]
@@ -32,14 +32,13 @@ dependencies = [
   "ipython",
   "pydantic",
 ]
-
-optional-dependencies."tests" = [
+optional-dependencies.tests = [
   "pytest",
   "pytest-cov",
   "pytest-xdist",
 ]
 urls."bug tracker" = "https://github.com/VERITAS-Observatory/V2DL5-Binary-Analysis/issues"
-urls."repository" = "https://github.com/VERITAS-Observatory/V2DL5-Binary-Analysis"
+urls.repository = "https://github.com/VERITAS-Observatory/V2DL5-Binary-Analysis"
 scripts.v2dl5-add_spectral-fits-to-light-curve-table = "v2dl5.scripts.add_spectral_fits_to_light_curve_table:main"
 scripts.v2dl5-generate-run-list = "v2dl5.scripts.generate_run_list:main"
 scripts.v2dl5-generate-run-lists-for-significant-points = "v2dl5.scripts.generate_run_lists_for_significant_points:main"
@@ -66,7 +65,6 @@ exclude = [
   "pyproject.toml",
   "simtools/_version.py",
 ]
-
 format.indent-style = "space"
 format.quote-style = "double"
 format.line-ending = "auto"
@@ -97,7 +95,7 @@ lint.ignore = [
   "G004",   # Logging statement uses f-string
   "ISC001", # incompatible with ruff format
   "N806",
-  "RUF012", #  Mutable class attributes should be annotated
+  "RUF012", # Mutable class attributes should be annotated
 ]
 lint.per-file-ignores."**/tests/**" = [
   "D",
@@ -105,62 +103,61 @@ lint.per-file-ignores."**/tests/**" = [
 lint.per-file-ignores."**/tests_*.py" = [
   "D",
 ]
-
 lint.pydocstyle.convention = "numpy"
 
 [tool.isort]
 profile = "black"
 filter_files = true
 
-[tool.pylint.main]
+[tool.pylint]
 # Good variable names which should always be accepted, separated by a comma.
-good-names = [
-  "e",
-  "i",
-  "j",
-  "k",
-  "x",
-  "y",
-  "n",
-  "f",
-  "r",
-  "ex",
-  "db",
-  "im",
-  "sh",
+main.good-names = [
   "ax",
-  "ce",
-  "xx",
-  "yy",
-  "zz",
   "C1",
   "C2",
   "C3",
   "C4",
   "C4x",
+  "ce",
+  "db",
+  "e",
+  "ex",
+  "f",
+  "hess",
+  "i",
+  "im",
+  "j",
+  "k",
+  "lst",
+  "magic",
+  "mask_V6_redHV",
+  "mst",
+  "n",
   "N1",
   "N2",
   "N3",
   "N4",
   "N4x",
-  "lst",
-  "mst",
-  "sst",
+  "r",
   "sct",
-  "hess",
-  "magic",
+  "sh",
+  "sst",
   "veritas",
-  "mask_V6_redHV",
+  "x",
+  "xx",
+  "y",
+  "yy",
+  "zz",
 ]
 # Ignore files
-ignore = [
+main.ignore = [
   "__init__.py",
-  "scm_version.py",
   "_version.py",
+  "scm_version.py",
 ]
 
-[tool.pytest.ini_options]
-minversion = "6.0"
-norecursedirs = [ "build", "docs/_build" ]
-addopts = "-v"
-testpaths = "v2dl5/tests/"
+[tool.pytest]
+ini_options.minversion = "6.0"
+ini_options.testpaths = "v2dl5/tests/"
+ini_options.norecursedirs = [ "build", "docs/_build" ]
+ini_options.addopts = "-v"

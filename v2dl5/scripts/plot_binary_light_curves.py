@@ -13,9 +13,9 @@ Includes the following plots:
 import argparse
 import logging
 
-import v2dl5.binaries as binaries
 import v2dl5.light_curves.binary_plotting
 import v2dl5.light_curves.data_reader
+from v2dl5 import binaries
 
 
 def _parse():

@@ -117,12 +117,7 @@ def find_groups(data):
             used_indices.update(sequence)
             i = sequence[-1] + 1
 
-        elif len(sequence) == 3:
-            groups.append(sequence)
-            used_indices.update(sequence)
-            i = sequence[-1] + 1
-
-        elif len(sequence) == 2:
+        elif len(sequence) == 3 or len(sequence) == 2:
             groups.append(sequence)
             used_indices.update(sequence)
             i = sequence[-1] + 1

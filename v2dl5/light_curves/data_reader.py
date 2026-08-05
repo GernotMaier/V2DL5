@@ -8,8 +8,8 @@ import numpy as np
 import yaml
 from astropy.table import Table
 
-import v2dl5.binaries as binaries
 import v2dl5.orbital_phase as orbit
+from v2dl5 import binaries
 
 
 class LightCurveDataReader:

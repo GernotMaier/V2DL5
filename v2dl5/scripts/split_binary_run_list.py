@@ -10,7 +10,7 @@ Used as input for gammapy or anasum analysis.
 import argparse
 import logging
 
-import v2dl5.run_lists as run_lists
+from v2dl5 import run_lists
 
 
 def _parse():

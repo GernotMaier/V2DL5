@@ -11,8 +11,7 @@ from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.time import Time
 
-import v2dl5.binaries as binaries
-import v2dl5.orbital_phase as orbital_phase
+from v2dl5 import binaries, orbital_phase
 
 _logger = logging.getLogger(__name__)
 
@@ -491,7 +490,7 @@ def split_binary_run_list(run_list_file, obs_table, binary_name, orbital_bins):
 
     """
     with open(run_list_file, encoding="utf-8") as f:
-        run_list = [line.strip() for line in f.readlines()]
+        run_list = [line.strip() for line in f]
     _logger.info(f"Splitting run list of length {len(run_list)} into {orbital_bins} bins")
     obs_table = astropy.table.Table.read(obs_table)
     obs_table = obs_table[np.isin(obs_table["OBS_ID"], run_list)]
