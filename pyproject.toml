@@ -24,7 +24,7 @@ dependencies = [
   "astropy",
   "astroquery",
   "awkward",
-  "gammapy",
+  "gammapy>=2.1,<2.2",
   "ipython",
   "matplotlib",
   "numpy",

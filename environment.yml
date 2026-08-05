@@ -11,8 +11,8 @@ dependencies:
   - astropy-base
   - astroquery
   - awkward
-  - gammapy
   - matplotlib
+  - pip
   - pre-commit
   - pydantic
   - pyyaml
@@ -22,6 +22,9 @@ dependencies:
   - pytest-cov
   - pytest-xdist
   - python=3.14
-  - "regions<0.12"
   - scipy
   - uproot
+  # These releases provide the Python 3.14 wheels used by this project.
+  - pip:
+      - "gammapy>=2.1,<2.2"
+      - "regions<0.12"
