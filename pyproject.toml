@@ -31,6 +31,7 @@ dependencies = [
   "gammapy",
   "ipython",
   "pydantic",
+  "regions<0.12",
 ]
 optional-dependencies.tests = [
   "pytest",
