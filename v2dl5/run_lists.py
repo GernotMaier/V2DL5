@@ -466,7 +466,9 @@ def _print_summary(obs_table, target_name, target):
     _logger.info(f"Total on time: {total_on_time_min:.2f} min" f" ({total_on_time_hour:.2f} hours)")
 
 
-def split_binary_run_list(run_list_file, obs_table, binary_name, orbital_bins):
+def split_binary_run_list(
+    run_list_file, obs_table, binary_name, equal_phase_bin_count=10, phase_bin_edges=None
+):
     """
     Split a run list into run list per orbital phase bins.
 
@@ -478,15 +480,35 @@ def split_binary_run_list(run_list_file, obs_table, binary_name, orbital_bins):
         Path to observation table.
     binary_name : str
         Binary name (e.g., LS I +61 303; see v2dl5.binaries for definition).
-    orbital_bins : float
-        Number of bins in orbital period for averaging.
+    equal_phase_bin_count : int
+        Number of equal-width orbital-phase bins.
+    phase_bin_edges : array-like, optional
+        Explicit orbital-phase bin edges, starting at 0 and ending at 1. If
+        provided, this takes precedence over ``equal_phase_bin_count``.
 
     """
     with open(run_list_file, encoding="utf-8") as f:
         run_list = [int(line.strip()) for line in f if line.strip()]
-    if orbital_bins < 1:
-        raise ValueError("orbital_bins must be positive")
-    _logger.info(f"Splitting run list of length {len(run_list)} into {orbital_bins} bins")
+    if phase_bin_edges is None:
+        if equal_phase_bin_count < 1:
+            raise ValueError("equal_phase_bin_count must be positive")
+        phase_edges = np.linspace(0.0, 1.0, equal_phase_bin_count + 1)
+    else:
+        phase_edges = np.asarray(phase_bin_edges, dtype=float)
+        if (
+            len(phase_edges) < 2
+            or not np.all(np.isfinite(phase_edges))
+            or phase_edges[0] != 0.0
+            or phase_edges[-1] != 1.0
+            or not np.all(np.diff(phase_edges) > 0)
+        ):
+            raise ValueError("phase_bin_edges must be strictly increasing edges from 0 to 1")
+        equal_phase_bin_count = len(phase_edges) - 1
+    _logger.info(
+        "Splitting run list of length %d into %d bins",
+        len(run_list),
+        equal_phase_bin_count,
+    )
     obs_table = astropy.table.Table.read(obs_table)
     obs_table = obs_table[np.isin(np.asarray(obs_table["OBS_ID"], dtype=int), run_list)]
     if len(obs_table) == 0:
@@ -497,18 +519,18 @@ def split_binary_run_list(run_list_file, obs_table, binary_name, orbital_bins):
         f"{binaries.binary_properties()[binary_name]['orbital_period']} days)"
     )
 
-    live_times = [0] * orbital_bins
+    live_times = [0] * equal_phase_bin_count
     output_stem = Path(run_list_file).with_suffix("")
     with ExitStack() as stack:
         output_files = [
             stack.enter_context(
                 open(
-                    f"{output_stem}_orbital_bin_{i:02d}.txt",
+                    f"{output_stem}_phase_bin_{i:02d}.txt",
                     "w",
                     encoding="utf-8",
                 )
             )
-            for i in range(orbital_bins)
+            for i in range(equal_phase_bin_count)
         ]
 
         for row in obs_table:
@@ -517,15 +539,17 @@ def split_binary_run_list(run_list_file, obs_table, binary_name, orbital_bins):
                 orbital_period=binaries.binary_properties()[binary_name]["orbital_period"],
                 mjd_0=binaries.binary_properties()[binary_name]["mjd_0"],
             )
-            bin_index = int(phase * orbital_bins) % orbital_bins
+            bin_index = min(
+                np.searchsorted(phase_edges, phase, side="right") - 1,
+                equal_phase_bin_count - 1,
+            )
             live_times[bin_index] += row["LIVETIME"]
             output_files[bin_index].write(f"{row['OBS_ID']}\n")
 
     plt.figure()
-    # Create histogram with bin edges from 0 to 1
     plt.hist(
-        np.linspace(0, 1, orbital_bins + 1)[:-1],
-        bins=np.linspace(0, 1, orbital_bins + 1),
+        phase_edges[:-1],
+        bins=phase_edges,
         weights=np.array(live_times) / 3600.0,
         histtype="step",
         linewidth=2,
@@ -538,5 +562,5 @@ def split_binary_run_list(run_list_file, obs_table, binary_name, orbital_bins):
     plt.close()
     _logger.info(f"Live time plot saved to {plot_file}")
 
-    _logger.info(f"Run lists written to {output_stem}_orbital_bin_*.txt")
+    _logger.info(f"Run lists written to {output_stem}_phase_bin_*.txt")
     _logger.info(f"Live times per orbital phase bin: {live_times}")
