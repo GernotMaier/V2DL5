@@ -20,6 +20,6 @@ dependencies:
   - pytest
   - pytest-cov
   - pytest-xdist
-  - python
+  - python=3.14
   - scipy
   - uproot
