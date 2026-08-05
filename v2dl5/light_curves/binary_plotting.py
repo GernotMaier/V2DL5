@@ -28,7 +28,25 @@ class BinaryLightCurvePlotter:
         self._logger = logging.getLogger(__name__)
 
         self.data = data
+        if not isinstance(config, list):
+            raise TypeError("Light-curve plotting configuration must be a list")
         self.config = config
+        self.config_by_instrument = {}
+        for item in config:
+            instrument = item.get("instrument")
+            if instrument is None:
+                raise ValueError("Every light-curve configuration needs an instrument")
+            if instrument in self.config_by_instrument:
+                raise ValueError(f"Duplicate light-curve configuration for {instrument}")
+            self.config_by_instrument[instrument] = item
+        missing_config = set(self.data).difference(self.config_by_instrument)
+        missing_data = set(self.config_by_instrument).difference(self.data)
+        if missing_config or missing_data:
+            raise ValueError(
+                "Data/configuration instruments do not match: "
+                f"missing configuration={sorted(missing_config)}, "
+                f"missing data={sorted(missing_data)}"
+            )
         self.binary = binary
 
     def plot_flux_vs_time(
@@ -80,12 +98,13 @@ class BinaryLightCurvePlotter:
             f"Plotting {y_axis} vs {time_axis}(MJD {mjd_min}, {mjd_max}, orbit id {orbit_number})"
         )
 
-        ax = axes if axes else plotting_utilities.paper_figures(None, None)
+        ax = axes if axes is not None else plotting_utilities.paper_figures(None, None)
 
-        for idx, (data_instrument, data) in enumerate(self.data.items()):
-            if not self.plot_this_instrument(self.config[idx], y_axis):
+        for data_instrument, data in self.data.items():
+            config = self.config_by_instrument[data_instrument]
+            if not self.plot_this_instrument(config, y_axis):
                 continue
-            color, marker = self.get_marker_and_color(idx)
+            color, marker = self.get_marker_and_color(data_instrument)
 
             x, y, e, x_ul, y_ul = self._get_light_curve_in_mjd_limits(
                 data,
@@ -96,7 +115,7 @@ class BinaryLightCurvePlotter:
                 orbit_number,
                 phase_min,
                 phase_max,
-                self.config[idx].get("significance_min", None),
+                config.get("significance_min"),
             )
             plt.errorbar(
                 x,
@@ -105,8 +124,8 @@ class BinaryLightCurvePlotter:
                 None,
                 label=(
                     data_instrument
-                    if self.config[idx].get("plot_label") is None
-                    else self.config[idx]["plot_label"]
+                    if config.get("plot_label") is None
+                    else config["plot_label"]
                 ),
                 color=color,
                 marker=marker,
@@ -131,12 +150,16 @@ class BinaryLightCurvePlotter:
                     markersize=plotting_utilities.get_marker_size() * 0.5,
                 )
 
-        ax.set_ylim([self.config[0].get("flux_axis_min"), self.config[0].get("flux_axis_max")])
+        first_config = self.config_by_instrument[next(iter(self.data))]
+        y_min = first_config.get(f"{y_axis}_axis_min")
+        y_max = first_config.get(f"{y_axis}_axis_max")
+        if y_min is not None and y_max is not None:
+            ax.set_ylim([y_min, y_max])
         ax.axhline(0, color="lightgray", linestyle="--")
         plt.xlabel(self._get_time_axis_label(time_axis), fontsize=fontsize)
         if mjd_min is not None and mjd_max is not None:
             ax.set_xlim([mjd_min, mjd_max])
-        plt.ylabel(self.config[0].get(y_axis + "_axis_label", ""), fontsize=fontsize)
+        plt.ylabel(first_config.get(y_axis + "_axis_label", ""), fontsize=fontsize)
         if axes is None:
             plt.legend()
             plotting_utilities.print_figure(
@@ -200,8 +223,7 @@ class BinaryLightCurvePlotter:
                 fontsize=fontsize,
                 markersize=plotting_utilities.get_marker_size() * 0.5,
             )
-            plt.rc("xtick", labelsize=fontsize)
-            plt.rc("ytick", labelsize=fontsize)
+            axes.tick_params(axis="both", labelsize=fontsize)
             plt.text(
                 0.05,
                 0.95,
@@ -258,8 +280,7 @@ class BinaryLightCurvePlotter:
                 fontsize=fontsize,
                 markersize=plotting_utilities.get_marker_size() * 0.5,
             )
-            plt.rc("xtick", labelsize=fontsize)
-            plt.rc("ytick", labelsize=fontsize)
+            axes.tick_params(axis="both", labelsize=fontsize)
             plt.text(
                 0.05,
                 0.95,
@@ -349,20 +370,17 @@ class BinaryLightCurvePlotter:
             self._logger.warning(f"Y-axis {y_key} not found in data")
             return x, y, e, x_ul, y_ul
         mjd = data["MJD"]
-        for i, t in enumerate(mjd):
-            if (
-                min_significance is not None
-                and data.get("significance", [None] * len(mjd))[i] < min_significance
-            ):
-                continue
-            if (mjd_min is not None and t < mjd_min) or (mjd_max is not None and t > mjd_max):
-                continue
-            if orbit_number is not None and data["orbit_number"][i] != orbit_number:
-                continue
-            if (phase_min is not None and data["phase"][i] < phase_min) or (
-                phase_max is not None and data["phase"][i] > phase_max
-            ):
-                continue
+        indices = self._select_indices(
+            data,
+            time_axis,
+            mjd_min,
+            mjd_max,
+            orbit_number,
+            phase_min,
+            phase_max,
+            min_significance,
+        )
+        for i in indices:
             if time_axis == "MJD":
                 w_x = data["MJD"][i]
             elif time_axis == "orbital phase":
@@ -377,7 +395,7 @@ class BinaryLightCurvePlotter:
             if _ul is not None and _ul > 0:
                 x_ul.append(w_x)
                 y_ul.append(data[y_key_ul][i])
-            elif y_key_ul not in data or data[y_key_ul][i] < 0:
+            else:
                 x.append(w_x)
                 y.append(data[y_key][i])
                 if y_key_err not in data:
@@ -386,25 +404,74 @@ class BinaryLightCurvePlotter:
                     e.append(data[y_key_err][i])
         return x, y, e, x_ul, y_ul
 
+    def _select_indices(
+        self,
+        data,
+        time_axis,
+        mjd_min=None,
+        mjd_max=None,
+        orbit_number=None,
+        phase_min=None,
+        phase_max=None,
+        min_significance=None,
+        y_keys=(),
+    ):
+        """Return indices satisfying the common light-curve selection criteria."""
+        if time_axis not in ("MJD", "orbital phase", "orbit number"):
+            raise ValueError(f"Unknown time axis: {time_axis}")
+        significance = data.get("significance")
+        indices = []
+        for index, time in enumerate(data["MJD"]):
+            if (
+                min_significance is not None
+                and significance is not None
+                and significance[index] < min_significance
+            ):
+                continue
+            if (mjd_min is not None and time < mjd_min) or (
+                mjd_max is not None and time > mjd_max
+            ):
+                continue
+            if orbit_number is not None and data["orbit_number"][index] != orbit_number:
+                continue
+            if phase_min is not None and data["phase"][index] < phase_min:
+                continue
+            if phase_max is not None and data["phase"][index] > phase_max:
+                continue
+            if any(
+                (limit := data.get(f"{key}_ul", [None] * len(data["MJD"]))[index]) is not None
+                and limit > 0
+                for key in y_keys
+            ):
+                continue
+            indices.append(index)
+        return indices
+
     def plot_this_instrument(self, config, y_axis):
         """Return if this instrument/axis should be plotted."""
         plot_this = config.get("plot_instrument", True)
-        if y_axis not in config.get("plot_axis", []):
+        plot_axis = config.get("plot_axis", config.get("plot_variable", []))
+        if isinstance(plot_axis, str):
+            plot_axis = [plot_axis]
+        if y_axis not in plot_axis:
             plot_this = False
         return plot_this
 
-    def get_marker_and_color(self, idx):
+    def get_marker_and_color(self, instrument):
         """Return marker and color."""
         colors = plotting_utilities.get_color_list(len(self.data))
+        idx = list(self.data).index(instrument)
+        config = self.config_by_instrument[instrument]
         color = (
             colors[idx]
-            if self.config[idx].get("marker_color") is None
-            else self.config[idx]["marker_color"]
+            if config.get("marker_color") is None
+            else config["marker_color"]
         )
+        marker_list = plotting_utilities.get_marker_list()
         marker = (
-            plotting_utilities.get_marker_list()[idx]
-            if self.config[idx].get("marker_type") is None
-            else self.config[idx]["marker_type"]
+            marker_list[idx % len(marker_list)]
+            if config.get("marker_type") is None
+            else config["marker_type"]
         )
         return color, marker
 
@@ -421,10 +488,11 @@ class BinaryLightCurvePlotter:
         ax = plotting_utilities.paper_figures(None, None)
         ax.set_xlim([0, 1])
 
-        for idx, (data_instrument, data) in enumerate(self.data.items()):
-            if self.config[idx].get("plot_live_time_histogram", False) is False:
+        for data_instrument, data in self.data.items():
+            config = self.config_by_instrument[data_instrument]
+            if config.get("plot_live_time_histogram", False) is False:
                 continue
-            color, _ = self.get_marker_and_color(idx)
+            color, _ = self.get_marker_and_color(data_instrument)
 
             x, y, _, _, _ = self._get_light_curve_in_mjd_limits(
                 data, "live_time", "orbital phase",
@@ -443,8 +511,8 @@ class BinaryLightCurvePlotter:
                 width=bin_width*0.9,
                 label=(
                     data_instrument
-                    if self.config[idx].get("plot_label") is None
-                    else self.config[idx]["plot_label"]
+                    if config.get("plot_label") is None
+                    else config["plot_label"]
                 ),
                 color=color,
                 alpha=0.7,
@@ -471,17 +539,23 @@ class BinaryLightCurvePlotter:
 
         _ = plotting_utilities.paper_figures(None, None)
 
-        for idx, (data_instrument, data) in enumerate(self.data.items()):
-            if self.config[idx].get("plot_flux_vs_index", False) is False:
+        for data_instrument, data in self.data.items():
+            config = self.config_by_instrument[data_instrument]
+            if config.get("plot_flux_vs_index", False) is False:
                 continue
-            color, _ = self.get_marker_and_color(idx)
+            if "flux" not in data or "index" not in data:
+                self._logger.warning(
+                    "Skipping %s in index-versus-flux plot: flux or index is missing",
+                    data_instrument,
+                )
+                continue
+            color, _ = self.get_marker_and_color(data_instrument)
 
-            _, x, x_e, _, _ = self._get_light_curve_in_mjd_limits(
-                data, "flux", "orbital phase",
-            )
-            _, y, y_e, _, _ = self._get_light_curve_in_mjd_limits(
-                data, "index", "orbital phase",
-            )
+            indices = self._select_indices(data, "orbital phase", y_keys=("flux", "index"))
+            x = [data["flux"][index] for index in indices]
+            y = [data["index"][index] for index in indices]
+            x_e = [data.get("flux_err", [0.0] * len(data["MJD"]))[index] for index in indices]
+            y_e = [data.get("index_err", [0.0] * len(data["MJD"]))[index] for index in indices]
             if len(x) == 0 or len(y) == 0:
                 continue
             x = np.array(x)
@@ -493,8 +567,8 @@ class BinaryLightCurvePlotter:
                 yerr=y_e,
                 label=(
                     data_instrument
-                    if self.config[idx].get("plot_label") is None
-                    else self.config[idx]["plot_label"]
+                    if config.get("plot_label") is None
+                    else config["plot_label"]
                 ),
                 color=color,
                 linestyle="none",
@@ -502,8 +576,9 @@ class BinaryLightCurvePlotter:
                 alpha=0.7,
             )
 
-        plt.xlabel(self.config[0].get("flux_axis_label", ""))
-        plt.ylabel(self.config[0].get("index_axis_label", ""))
+        first_config = self.config_by_instrument[next(iter(self.data))]
+        plt.xlabel(first_config.get("flux_axis_label", ""))
+        plt.ylabel(first_config.get("index_axis_label", ""))
 
         plt.legend()
         plotting_utilities.print_figure(
@@ -524,10 +599,11 @@ class BinaryLightCurvePlotter:
 
         _ = plotting_utilities.paper_figures(None, None)
 
-        for idx, (data_instrument, data) in enumerate(self.data.items()):
-            if self.config[idx].get("plot_1d_distribution", False) is False:
+        for data_instrument, data in self.data.items():
+            config = self.config_by_instrument[data_instrument]
+            if config.get("plot_1d_distribution", False) is False:
                 continue
-            color, _ = self.get_marker_and_color(idx)
+            color, _ = self.get_marker_and_color(data_instrument)
 
             _, y, _, _, _ = self._get_light_curve_in_mjd_limits(
                 data, y_axis, "orbital phase",
@@ -540,14 +616,15 @@ class BinaryLightCurvePlotter:
                 bins=25,
                 label=(
                     data_instrument
-                    if self.config[idx].get("plot_label") is None
-                    else self.config[idx]["plot_label"]
+                    if config.get("plot_label") is None
+                    else config["plot_label"]
                 ),
                 color=color,
                 alpha=0.7,
             )
 
-        plt.xlabel(self.config[0].get(y_axis + "_axis_label", ""))
+        first_config = self.config_by_instrument[next(iter(self.data))]
+        plt.xlabel(first_config.get(y_axis + "_axis_label", ""))
         plt.ylabel("Counts")
 
         plt.legend()

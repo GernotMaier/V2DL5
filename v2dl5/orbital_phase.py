@@ -39,8 +39,6 @@ def get_orbital_phase(mjd, orbital_period, mjd_0, phase_reduce=True):
     """
     Calculate orbital phase for a given MJD.
 
-    TODO: check how necessary the np.squeeze is
-
     Parameters
     ----------
     mjd: float

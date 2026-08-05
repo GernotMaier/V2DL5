@@ -2,6 +2,7 @@
 
 import logging
 import os
+from pathlib import Path
 
 import astropy.units as u
 import numpy as np
@@ -34,17 +35,22 @@ class LightCurveDataReader:
 
         self.data_dict = {}
         try:
-            with open(configuration_file) as file:
+            with open(configuration_file, encoding="utf-8") as file:
                 _yml_in = yaml.safe_load(file)
                 self.config = _yml_in["data"]
         except FileNotFoundError:
             self._logger.error("Configuration file not found: %s", configuration_file)
             raise
-        except KeyError:
+        except (KeyError, TypeError):
             self._logger.error("Data key not found in configuration file %s", configuration_file)
             raise
 
+        if not isinstance(self.config, list) or not self.config:
+            raise ValueError("Light-curve configuration must contain a non-empty data list")
+
         self.binary = binary
+        if self.binary is None:
+            raise ValueError("Binary properties are required for light-curve analysis")
         self._logger.info("Binary properties: %s", self.binary)
 
     def read_data(self):
@@ -58,26 +64,33 @@ class LightCurveDataReader:
 
         """
         for data_config in self.config:
-            self.data_dict[data_config["instrument"]] = self._read_fluxes_from_file(data_config)
-            self._add_orbital_parameters(self.data_dict[data_config["instrument"]], data_config)
+            instrument = data_config.get("instrument")
+            if not instrument:
+                raise ValueError("Every light-curve data entry needs an instrument")
+            if instrument in self.data_dict:
+                raise ValueError(f"Duplicate light-curve instrument: {instrument}")
+            data = self._read_fluxes_from_file(data_config)
+            self._add_orbital_parameters(data, data_config)
+            self.data_dict[instrument] = data
 
     def _read_fluxes_from_file(self, data_config):
         """Read flux from file."""
         try:
-            data_config["file_name"] = os.path.expandvars(data_config["file_name"])
+            file_name = os.path.expandvars(data_config["file_name"])
         except KeyError:
             self._logger.error(f"File name not found in configuration {data_config}")
-            raise KeyError
+            raise
 
-        if data_config["file_name"].endswith((".csv", ".ecsv")):
-            self._logger.info("Reading data from %s", data_config["file_name"])
+        suffix = Path(file_name).suffix.lower()
+        if suffix in (".csv", ".ecsv"):
+            self._logger.info("Reading data from %s", file_name)
             return self._read_fluxes_from_ecsv_file(
-                file_name=data_config["file_name"],
+                file_name=file_name,
                 mjd_min=data_config.get("mjd_min", -1.0),
                 mjd_max=data_config.get("mjd_max", -1.0),
             )
 
-        return None
+        raise ValueError(f"Unsupported light-curve file type: {file_name}")
 
     def _apply_phase_mask(self, data, data_config):
         """
@@ -147,13 +160,13 @@ class LightCurveDataReader:
             )
             for a, b, c in zip(data["time_min"], data["time_max"], data["phase"])
         ]
-        data["phase_err_hig"] = [
+        data["phase_err_high"] = [
             orbit.get_orbital_phase_range(
                 a, b, c, upper_error=True, orbital_period=orbital_period, mjd_0=mjd_0
             )
             for a, b, c in zip(data["time_min"], data["time_max"], data["phase"])
         ]
-        data["phase_err"] = [data["phase_err_low"], data["phase_err_hig"]]
+        data["phase_err"] = list(zip(data["phase_err_low"], data["phase_err_high"]))
 
         data["orbit_number"] = [
             orbit.get_orbit_number(
@@ -164,12 +177,14 @@ class LightCurveDataReader:
             for mjd in data["MJD"]
         ]
 
-    def convert_photon_to_energy_flux(self, c_e, e_0, gamma):
-        """Convert photon to energy flux."""
+    def convert_photon_to_energy_flux(self, c_e, e_0, gamma, c_e_err=None):
+        """Convert photon flux and, optionally, its error to energy flux."""
         f = (-1.0 * gamma + 1) / (-1.0 * gamma + 2)
         # conversion to erg
         f = f * (e_0.to(u.erg)).value
-        return [v * f for v in self], [e * f for e in c_e]
+        flux = np.asarray(c_e) * f
+        error = None if c_e_err is None else np.asarray(c_e_err) * f
+        return flux.tolist(), None if error is None else error.tolist()
 
     def _read_fluxes_from_ecsv_file(
         self, file_name, time_min_max=True, mjd_min=-1.0, mjd_max=-1.0
@@ -189,12 +204,25 @@ class LightCurveDataReader:
             MJD max value for MJD cut
 
         """
-        table = Table.read(file_name)
-        f = {}
+        suffix = Path(file_name).suffix.lower()
+        table = Table.read(file_name, format="ascii.ecsv" if suffix == ".ecsv" else "ascii.csv")
 
         if "time" not in table.colnames and "MJD" in table.colnames:
             table.rename_column("MJD", "time")
             time_min_max = False
+        elif "time" in table.colnames and "time_min" not in table.colnames:
+            time_min_max = False
+
+        required = {"time" if not time_min_max else "time_min", "flux"}
+        if not time_min_max:
+            required.add("time")
+        missing = required.difference(table.colnames)
+        if missing:
+            raise ValueError(f"Light-curve table is missing columns: {', '.join(sorted(missing))}")
+        if "flux_err" not in table.colnames and not {
+            "flux_up", "flux_down"
+        }.issubset(table.colnames):
+            raise ValueError("Light-curve table needs flux_err or both flux_up and flux_down")
 
         if not time_min_max:
             table["time_min"] = table["time"].data
@@ -222,6 +250,8 @@ class LightCurveDataReader:
         f["MJD_err"] = [0.5 * (b - a) for a, b in zip(f["time_min"], f["time_max"])]
         if "flux_ul" in table.colnames:
             flux_ul = table["flux_ul"].data.flatten().tolist()
+            if "is_ul" not in table.colnames:
+                raise ValueError("Light-curve table has flux_ul but no is_ul column")
             is_ul = table["is_ul"].data.flatten().tolist()
             f["flux_ul"] = [flux if is_ul else -1.0 for flux, is_ul in zip(flux_ul, is_ul)]
         else:

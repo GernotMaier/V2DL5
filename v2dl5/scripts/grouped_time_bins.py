@@ -12,17 +12,20 @@ Groups observations in order to obtainer longer bins based on the following rule
 
 Example usage:
 
-    python group.py
-    python group.py --max_gap 2.0 --max_group 4
+    v2dl5-grouped-time-bins --light_curve_file light_curve.ecsv \
+        --time_bins_file time_bins.ecsv
+    v2dl5-grouped-time-bins --light_curve_file light_curve.ecsv \
+        --time_bins_file time_bins.ecsv --max_gap 2.0 --max_group 4
 """
 
 import argparse
+from pathlib import Path
 
 import numpy as np
 from astropy.table import Table
 
 
-def should_group(times, max_gap=1.0, max_group=2):
+def should_group(times, max_gap=1.0, max_group=4):
     """
     Determine if a sequence of times should be grouped together.
 
@@ -42,7 +45,22 @@ def should_group(times, max_gap=1.0, max_group=2):
     return all(gap <= max_gap for gap in gaps) and len(times) <= max_group
 
 
-def find_groups(data):
+def _split_sequence(sequence, max_group):
+    """Split a contiguous sequence without leaving a final singleton."""
+    groups = []
+    sequence = list(sequence)
+    while len(sequence) > max_group:
+        take = max_group
+        if len(sequence) - take == 1:
+            take -= 1
+        groups.append(sequence[:take])
+        sequence = sequence[take:]
+    if sequence:
+        groups.append(sequence)
+    return groups
+
+
+def find_groups(data, max_gap=1.0, max_group=4):
     """
     Find groups of observations based on the specified rules.
 
@@ -53,80 +71,19 @@ def find_groups(data):
     - Avoid single observations at end of sequences
     - Split longer sequences into optimal groups
     """
+    if max_group < 2:
+        raise ValueError("max_group must be at least 2")
+
     groups = []
-    used_indices = set()
-    i = 0
-
-    while i < len(data):
-        if i in used_indices:
-            i += 1
-            continue
-
-        # Look ahead for consecutive observations
-        sequence = [i]
-        j = i + 1
-        while j < len(data) and j not in used_indices:
-            gap = data['time_min'][j] - data['time_max'][sequence[-1]]
-            if gap <= 1.0:
-                sequence.append(j)
-            else:
-                break
-            j += 1
-
-        # Handle different sequence lengths
-        if len(sequence) >= 7:
-            # Split into triplets plus remainder
-            num_groups = len(sequence) // 3
-            remainder = len(sequence) % 3
-
-            if remainder == 1:  # Avoid single observation at end
-                num_groups -= 1
-                remainder = 4  # Make last group a quartet
-
-            for k in range(num_groups):
-                groups.append(sequence[k*3:(k+1)*3])
-            if remainder:
-                groups.append(sequence[num_groups*3:])
-
-            used_indices.update(sequence)
-            i = sequence[-1] + 1
-
-        elif len(sequence) == 6:
-            # Split into two triplets
-            groups.append(sequence[:3])
-            groups.append(sequence[3:])
-            used_indices.update(sequence)
-            i = sequence[-1] + 1
-
-        elif len(sequence) == 5:
-            # Split 3+2 or 2+3 based on context
-            if i + 5 < len(data) and data['time_min'][i+5] - data['time_max'][sequence[-1]] <= 1.0:
-                # If next observation is close, do 2+3 to avoid single observation
-                groups.append(sequence[:2])
-                groups.append(sequence[2:])
-            else:
-                # Otherwise do 3+2
-                groups.append(sequence[:3])
-                groups.append(sequence[3:])
-            used_indices.update(sequence)
-            i = sequence[-1] + 1
-
-        elif len(sequence) == 4:
-            # Keep as quartet to avoid single observation
-            groups.append(sequence)
-            used_indices.update(sequence)
-            i = sequence[-1] + 1
-
-        elif len(sequence) == 3 or len(sequence) == 2:
-            groups.append(sequence)
-            used_indices.update(sequence)
-            i = sequence[-1] + 1
-
-        else:
-            groups.append([i])
-            used_indices.add(i)
-            i += 1
-
+    sequence = []
+    for index in range(len(data)):
+        if sequence:
+            gap = data["time_min"][index] - data["time_max"][sequence[-1]]
+            if gap > max_gap:
+                groups.extend(_split_sequence(sequence, max_group))
+                sequence = []
+        sequence.append(index)
+    groups.extend(_split_sequence(sequence, max_group))
     return groups
 
 
@@ -145,7 +102,7 @@ def parse_args():
         "--time_bins_file",
         type=str,
         required=True,
-        help="Output file for time bins (ASCII format)"
+        help="Output file for time bins (ECSV format)"
     )
     parser.add_argument(
         "--max_gap",
@@ -163,21 +120,24 @@ def parse_args():
 
 
 def write_time_bins(filename, data, groups):
-    """Write time bins to ASCII file."""
-    with open(filename, 'w') as f:
-        for group in groups:
-            start_time = data['time_min'][group[0]]
-            end_time = data['time_max'][group[-1]]
-            f.write(f"{int(start_time)} {int(np.ceil(end_time))}\n")
+    """Write time bins as an ECSV table."""
+    Path(filename).parent.mkdir(parents=True, exist_ok=True)
+    output = Table(
+        {
+            "time_min": [data["time_min"][group[0]] for group in groups],
+            "time_max": [data["time_max"][group[-1]] for group in groups],
+        }
+    )
+    output.write(filename, format="ascii.ecsv", overwrite=True)
 
 
 def main():
     """Group light curve observations into broader time bins."""
     args = parse_args()
 
-    data = Table.read(filename=args.light_curve_file, format='ascii.ecsv')
+    data = Table.read(filename=args.light_curve_file, format="ascii.ecsv")
 
-    groups = find_groups(data)
+    groups = find_groups(data, max_gap=args.max_gap, max_group=args.max_group)
 
     write_time_bins(args.time_bins_file, data, groups)
 

@@ -4,7 +4,6 @@ import logging
 import math
 from pathlib import Path
 
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -76,7 +75,9 @@ def get_color_list(n_colors, plot_type=None):
         colormap = plt.cm.tab10
     else:
         colormap = plt.cm.tab20b
-    return [colormap(i) for i in np.linspace(0, 1, n_colors + 1)]
+    if n_colors < 1:
+        return []
+    return [colormap(i) for i in np.linspace(0, 1, n_colors)]
 
 
 def get_marker_list():
@@ -109,6 +110,7 @@ def print_figure(print_name, file_type=".pdf", figure_dir="./figures/"):
         plt.savefig(figure_file, dpi=(400))
     else:
         plt.savefig(figure_file)
+    plt.close()
 
 
 def get_paper_figures_parameters(width=None, height=None, xtick_top=True, legend_font_size=8):
@@ -140,11 +142,18 @@ def get_paper_figures_parameters(width=None, height=None, xtick_top=True, legend
 def paper_figures(width=None, height=None, columns=1, xtick_top=True):
     """Set figures parameters for paper plotting."""
     paper_parameters = get_paper_figures_parameters(width, height, xtick_top)
-    mpl.rcParams.update(paper_parameters)
     width = paper_parameters["figure.figsize"][0] if width is None else width
     height = paper_parameters["figure.figsize"][1] if height is None else height
 
-    plt.gcf().clear()
-    plt.figure(figsize=(width, height))
+    figure, axes = plt.subplots(figsize=(width, height), squeeze=False)
+    axes = axes[0, 0]
+    axes.tick_params(
+        axis="both",
+        direction="in",
+        top=xtick_top,
+        right=True,
+        labelsize=paper_parameters["xtick.labelsize"],
+    )
+    figure.tight_layout()
 
-    return plt.gca()
+    return axes

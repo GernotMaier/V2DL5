@@ -25,7 +25,7 @@ def get_list_of_nights(data_set, time_zone=-7.0):
     time_list = _get_starting_times(data_set)
 
     # Reduce the list to intervals
-    _mjd = {(int)(time_obj.mjd) for time_obj in time_list}
+    _mjd = sorted({int(time_obj.mjd) for time_obj in time_list})
 
     time_intervals = []
     for _night in _mjd:
@@ -72,8 +72,13 @@ def get_time_bins_from_file(file_name):
         List of time bins.
 
     """
+    _time_table = Table.read(file_name, format="ascii.ecsv")
+    required_columns = {"time_min", "time_max"}
+    missing = required_columns.difference(_time_table.colnames)
+    if missing:
+        raise ValueError(f"Time-bin file is missing columns: {', '.join(sorted(missing))}")
+
     _time_bins = []
-    _time_table = Table.read(file_name)
     for _row in _time_table:
         _time_bins.append(Time([_row["time_min"], _row["time_max"]], format="mjd", scale="utc"))
 

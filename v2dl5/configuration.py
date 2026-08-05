@@ -5,6 +5,7 @@ Read configuration from file (or us default parameters).
 
 """
 
+import copy
 import logging
 
 import yaml
@@ -34,8 +35,9 @@ def configuration(args, generate_dqm_run_list=False):
         args_dict["target_list"] = args.target_list
     except AttributeError:
         pass
-    if args.config is not None:
-        args_dict.update(_read_config_from_file(args.config))
+    config_file = getattr(args, "config", None)
+    if config_file is not None:
+        args_dict = _merge_config(args_dict, _read_config_from_file(config_file))
 
     if generate_dqm_run_list:
         args_dict["obs_table"] = args.obs_table
@@ -43,7 +45,69 @@ def configuration(args, generate_dqm_run_list=False):
         args_dict["run_list"] = args.run_list
     args_dict["output_dir"] = args.output_dir
 
+    _validate_config(args_dict, generate_dqm_run_list)
     return args_dict
+
+
+def _merge_config(default, override):
+    """Recursively merge a user configuration into defaults."""
+    if not isinstance(override, dict):
+        raise TypeError("Configuration file must contain a mapping at the top level")
+
+    merged = copy.deepcopy(default)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge_config(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _validate_config(config, generate_dqm_run_list=False):
+    """Validate the required configuration structure."""
+    required = (
+        ("observations", "dqm", "atmosphere")
+        if generate_dqm_run_list
+        else ("observations", "on_region", "datasets", "fit", "flux_points", "light_curve")
+    )
+    missing = [key for key in required if not isinstance(config.get(key), dict)]
+    if missing:
+        raise ValueError(f"Missing configuration sections: {', '.join(missing)}")
+
+    required_nested = (
+        {
+            "observations": ("obs_cone_radius_min", "obs_cone_radius_max"),
+            "dqm": ("dqmstat", "ntel_min", "ontime_min"),
+            "atmosphere": ("weather",),
+        }
+        if generate_dqm_run_list
+        else {
+            "observations": ("datastore",),
+            "on_region": (),
+            "datasets": ("geom", "safe_mask", "exclusion_region"),
+            "fit": ("model",),
+            "flux_points": ("energy",),
+            "light_curve": ("energy",),
+        }
+    )
+    for section, keys in required_nested.items():
+        missing = [key for key in keys if key not in config[section]]
+        if missing:
+            raise ValueError(f"Missing configuration keys in {section}: {', '.join(missing)}")
+
+    if not generate_dqm_run_list:
+        for section, keys in {
+            "datasets.geom": ("axes",),
+            "datasets.safe_mask": ("methods", "parameters"),
+            "flux_points.energy": ("min", "max", "nbins"),
+            "light_curve.energy": ("min", "max"),
+        }.items():
+            values = config
+            for part in section.split("."):
+                values = values[part]
+            missing = [key for key in keys if key not in values]
+            if missing:
+                raise ValueError(f"Missing configuration keys in {section}: {', '.join(missing)}")
 
 
 def _default_config(generate_dqm_run_list=False):
@@ -91,7 +155,9 @@ def _read_config_from_file(config):
         _logger.error(exc)
         raise
 
-    _logger.info(f"Configuration from file: {args_dict}")
+    if args_dict is None:
+        raise ValueError(f"Configuration file {config} is empty")
+    _logger.info("Configuration from file: %s", args_dict)
     return args_dict
 
 
@@ -132,7 +198,7 @@ def _default_config_analysis():
                 "magnitude_B": 7.0,
                 "star_exclusion_radius": "0.3 deg",
                 "fov": "5 deg",
-                "star_file": "./data/hip_mag9.fits.gz",
+                "star_file": "hip_mag9.fits.gz",
             },
             "containment_correction": False,
             "safe_mask": {

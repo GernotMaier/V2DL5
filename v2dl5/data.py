@@ -38,6 +38,8 @@ class Data:
 
         """
         self._logger = logging.getLogger(__name__)
+        self._observation_cache = {}
+        self._bti = args_dict.get("bti")
 
         self._logger.info(
             "Initializing data object from %s", args_dict["observations"]["datastore"]
@@ -73,14 +75,16 @@ class Data:
             List of observations.
 
         """
-        required_irf = "full-enclosure"
-        if reflected_region:
-            required_irf = "point-like"
-        return self._data_store.get_observations(
-            self.runs,
-            required_irf=required_irf,
-            skip_missing=skip_missing,
-        )
+        cache_key = (reflected_region, skip_missing)
+        if cache_key not in self._observation_cache:
+            required_irf = "point-like" if reflected_region else "full-enclosure"
+            self._observation_cache[cache_key] = self._data_store.get_observations(
+                self.runs,
+                required_irf=required_irf,
+                skip_missing=skip_missing,
+            )
+            self._apply_bti(self._observation_cache[cache_key])
+        return self._observation_cache[cache_key]
 
     def _from_run_list(self, run_list):
         """
@@ -119,14 +123,18 @@ class Data:
             observation cone radius (deg).
 
         """
+        if self.target is None:
+            raise ValueError("A target is required for target-based data selection")
         observations = self._data_store.obs_table
-        mask = self.target.separation(observations.pointing_radec) < obs_cone_radius * u.deg
+        obs_cone_radius = u.Quantity(obs_cone_radius).to(u.deg)
+        mask = self.target.separation(observations.pointing_radec) < obs_cone_radius
         _runs = observations[mask]["OBS_ID"].data
 
         self._logger.info(
             "Selecting %d runs from observation cone around %s", len(_runs), self.target
         )
-        self._logger.warning("THIS IS NOT TESTED")
+        if len(_runs) == 0:
+            raise ValueError(f"No observations found within {obs_cone_radius} of {self.target}")
         return _runs
 
     def get_on_region_radius(self):
@@ -188,18 +196,25 @@ class Data:
             Given us {"run": run, "bti_start": start, "bti_length": length}
 
         """
-        if bti is None:
+        if bti is not None:
+            self._bti = bti
+
+        for observations in self._observation_cache.values():
+            self._apply_bti(observations)
+
+    def _apply_bti(self, observations):
+        """Apply configured bad-time intervals to an observation collection."""
+        if self._bti is None:
             return
 
-        for obs in self.get_observations():
+        for obs in observations:
             bti_pairs = [
                 (item["bti_start"], item["bti_start"] + item["bti_length"])
-                for item in bti
+                for item in self._bti
                 if item["run"] == obs.obs_id
             ]
             if len(bti_pairs) == 0:
-                self._logger.debug("No BTI found for {obs.obs_id}")
+                self._logger.debug("No BTI found for %s", obs.obs_id)
                 continue
-            self._logger.debug("Updating GTI for {obs.obs_id} with {bti_pairs}")
-            obs.gti.stack(other=BTI.BTI(obs).update_gti(bti_pairs))
-            obs.gti.union()
+            self._logger.debug("Updating GTI for %s with %s", obs.obs_id, bti_pairs)
+            obs.gti = BTI.BTI(obs).update_gti(bti_pairs)

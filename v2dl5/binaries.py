@@ -1,10 +1,5 @@
 """Binary properties."""
 
-import logging
-
-logging.basicConfig(level=logging.INFO)
-
-
 def binary_properties():
     """
     List of properties of selected binary systems.

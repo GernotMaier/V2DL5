@@ -69,7 +69,26 @@ jobs:
 
       - name: Python dependencies
         run: |
-          pip install -e '.[tests,dev,doc]'
+          pip install -e '.[tests]' build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Install built wheel
+        run: python -m pip install --force-reinstall --no-deps dist/*.whl
+
+      - name: Check console-script entry points
+        run: |
+          v2dl5-add_spectral-fits-to-light-curve-table --help
+          v2dl5-generate-run-list --help
+          v2dl5-generate-run-lists-for-significant-points --help
+          v2dl5-generate-run-lists-from-target-list --help
+          v2dl5-grouped-time-bins --help
+          v2dl5-nightly-time-bins --help
+          v2dl5-plot-binary-light-curves --help
+          v2dl5-print-simplified-light-curve --help
+          v2dl5-reflected-region-analysis --help
+          v2dl5-split-binary-run-list --help
 
       - name: Pre-commit
         run: |

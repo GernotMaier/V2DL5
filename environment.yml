@@ -10,10 +10,12 @@ channels:
 dependencies:
   - astropy-base
   - astroquery
+  - awkward
   - gammapy
   - matplotlib
   - pre-commit
   - pydantic
+  - pyyaml
   - pyflakes
   - pylint
   - pytest

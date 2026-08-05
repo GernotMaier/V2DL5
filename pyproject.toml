@@ -10,17 +10,12 @@ license = { file = "LICENSE" }
 authors = [
   { name = "Gernot Maier", email = "gernot.maier@desy.de" },
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.14"
 classifiers = [
   "Intended Audience :: Science/Research",
   "License :: OSI Approved :: BSD License",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.9",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
   "Topic :: Scientific/Engineering :: Astronomy",
 ]
@@ -28,10 +23,16 @@ dynamic = [ "version" ]
 dependencies = [
   "astropy",
   "astroquery",
+  "awkward",
   "gammapy",
   "ipython",
+  "matplotlib",
+  "numpy",
   "pydantic",
+  "pyyaml",
   "regions<0.12",
+  "scipy",
+  "uproot",
 ]
 optional-dependencies.tests = [
   "pytest",
@@ -52,8 +53,9 @@ scripts.v2dl5-reflected-region-analysis = "v2dl5.scripts.reflected_region_analys
 scripts.v2dl5-split-binary-run-list = "v2dl5.scripts.split_binary_run_list:main"
 
 [tool.setuptools]
-packages = [ "v2dl5" ]
+packages.find.include = [ "v2dl5*" ]
 include-package-data = true
+package-data.v2dl5 = [ "data/*.fits.gz" ]
 
 [tool.setuptools_scm]
 write_to = "v2dl5/_version.py"
@@ -159,6 +161,6 @@ main.ignore = [
 
 [tool.pytest]
 ini_options.minversion = "6.0"
-ini_options.testpaths = "v2dl5/tests/"
+ini_options.testpaths = [ "tests" ]
 ini_options.norecursedirs = [ "build", "docs/_build" ]
 ini_options.addopts = "-v"

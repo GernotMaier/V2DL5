@@ -89,11 +89,13 @@ datasets:
 
 Star catalogs are expected to be in the [v2dl5/data](v2dl5/data) directory and of FITS format.
 
-## Eventdisplay and anasum analysis
+## External Eventdisplay and anasum analysis
 
 High-level analysis is also possible with the [Eventdisplay](https://github.com/VERITAS-Observatory/EventDisplay_v4) package and its high-level tool anasum.
 
-All scripts are containerized and can be run with the provided docker container.
+The following commands belong to the external Eventdisplay/anasum container workflow and are
+not shipped by this Python package. The Python entry points listed above are the supported
+commands in this repository.
 
 ### Light-curve analysis
 
@@ -120,8 +122,11 @@ MJD_start MJD_stop
 To generate a time cuts file for nightly binning:
 
 ```console
-./nightly_time_bins.sh <anasum file>
+v2dl5-nightly-time-bins --anasum_file <anasum file> --output_file nights.ecsv
 ```
+
+The generated ECSV file can be passed to the light-curve analysis as a time-bin
+file; its columns are `time_min` and `time_max` in MJD.
 
 ### Validate time cuts and generate run lists
 

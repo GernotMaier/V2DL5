@@ -2,6 +2,8 @@
 name: Unittests
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
     types: [opened, synchronize]
@@ -36,4 +38,4 @@ jobs:
         shell: bash -leo pipefail {0}
         env:
           PYTHONPATH: .
-        run: pytest --durations=10 --color=yes .
+        run: pytest --strict-config --durations=10 --color=yes
