@@ -61,7 +61,7 @@ jobs:
       # Dependencies required to avoid errors
       # reported by linters
       - name: Install conda dependencies
-        uses: conda-incubator/setup-miniconda@v3
+        uses: conda-incubator/setup-miniconda@v4
         with:
           activate-environment: v2dl5
           environment-file: environment.yml
